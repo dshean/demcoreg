@@ -56,7 +56,7 @@ def get_lulc(datadir):
         nlcd_fn_zip = wget.download('http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip', out=datadir)
     #unzip fails to extract ige file
     #7za x nlcd_2011_landcover_2011_edition_2014_10_10.zip
-    print("Unzipping: %s" % nlcd_fn_zip)
+    print(("Unzipping: %s" % nlcd_fn_zip))
     zip_ref = zipfile.ZipFile(nlcd_fn_zip, 'r')
     zip_ref.extractall(datadir)
 
@@ -107,7 +107,7 @@ def write_rockmask(mask):
     #Better for bool
     opt.remove('COMPRESS=LZW')
     opt.append('COMPRESS=DEFLATE')
-    print(mask.shape[1], mask.shape[0], mask.shape[1]*mask.shape[0]*8./1E6)
+    print((mask.shape[1], mask.shape[0], mask.shape[1]*mask.shape[0]*8./1E6))
     dst_ds = iolib.gtif_drv.Create(outmask_fn, mask.shape[1], mask.shape[0], 1, gdal_dtype, options=opt)
     dst_ds.SetGeoTransform(nlcd_ds.GetGeoTransform())
     dst_ds.SetProjection(nlcd_ds.GetProjection())
@@ -122,17 +122,17 @@ def getfile(url, outdir=None):
     if outdir is not None:
         fn = os.path.join(outdir, fn)
     if not os.path.exists(fn):
-        import urllib
-        print("Retrieving: %s" % url)
+        import urllib.request, urllib.parse, urllib.error
+        print(("Retrieving: %s" % url))
         #Add progress bar
-        urllib.urlretrieve(url, fn)
+        urllib.request.urlretrieve(url, fn)
     return fn
 
 #Function to get files using requests
 #Works with https authentication
 def getfile2(url, auth=None, outdir=None):
     import requests
-    print("Retrieving: %s" % url)
+    print(("Retrieving: %s" % url))
     fn = os.path.split(url)[-1]
     if outdir is not None:
         fn = os.path.join(outdir, fn)
@@ -214,7 +214,7 @@ def get_snodas(dem_dt, outdir=None):
 def get_auth():
     import getpass
     from requests.auth import HTTPDigestAuth
-    uname = raw_input("MODSCAG Username:")
+    uname = input("MODSCAG Username:")
     pw = getpass.getpass("MODSCAG Password:")
     auth = HTTPDigestAuth(uname, pw)
     #wget -A'h8v4*snow_fraction.tif' --user=uname --password=pw
@@ -248,7 +248,7 @@ def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h
                 print(modscag_url_base)
                 r = requests.get(modscag_url_base, auth=auth)
             if not r.ok:
-                print("Unable to fetch MODSCAG for %s" % dt)
+                print(("Unable to fetch MODSCAG for %s" % dt))
             else:
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
@@ -325,7 +325,7 @@ def main():
 
     if True:
         nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
-        print nlcd_fn
+        print(nlcd_fn)
         if not os.path.exists(nlcd_fn):
             get_lulc(datadir)
         nlcd_ds = gdal.Open(nlcd_fn)
@@ -377,7 +377,7 @@ def main():
         rockmask = make_rockmask(ds_list[1])
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(rockmask, out_fn, src_ds=dem_ds)
         newmask = np.logical_and(rockmask, newmask)
 
@@ -388,14 +388,14 @@ def main():
         snodas_depth = iolib.ds_getma(ds_list[2])/1000.
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(snodas_depth, out_fn, src_ds=dem_ds)
         snodas_mask = np.ma.masked_greater(snodas_depth, snodas_max_depth)
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_snowdas_mask.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(snodas_mask, out_fn, src_ds=dem_ds)
         newmask = np.logical_and(snodas_mask, newmask)
 
@@ -405,14 +405,14 @@ def main():
         modscag_perc = iolib.ds_getma(ds_list[3])
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_perc.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=dem_ds)
         modscag_mask = (modscag_perc.filled(0) >= modscag_thresh) 
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         modscag_mask = ~(modscag_mask)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_mask.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(modscag_mask, out_fn, src_ds=dem_ds)
         newmask = np.logical_and(modscag_mask, newmask)
 
@@ -425,7 +425,7 @@ def main():
         toa_mask = ~(np.ma.getmaskarray(toa_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_toamask.tif'
-            print("Writing out %s" % out_fn)
+            print(("Writing out %s" % out_fn))
             iolib.writeGTiff(toa_mask, out_fn, src_ds=dem_ds)
         newmask = np.logical_and(toa_mask, newmask)
 
@@ -446,7 +446,7 @@ def main():
 
     #Write out final mask
     out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
-    print("Writing out %s" % out_fn)
+    print(("Writing out %s" % out_fn))
     iolib.writeGTiff(newdem, out_fn, src_ds=dem_ds)
 
 if __name__ == "__main__":
