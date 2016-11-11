@@ -125,6 +125,7 @@ def main():
     if out_fmt == "VRT": 
         print("Writing vrt with scaled values")
         dst_fn = out_fn+'.vrt'
+        driver = gdal.GetDriverByName("VRT")
         dst_ds = driver.CreateCopy(dst_fn, src_ds, 0)
         dst_ds.GetRasterBand(1).SetOffset(proj_shift[2])
     else:
