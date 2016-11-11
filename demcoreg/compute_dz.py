@@ -55,7 +55,7 @@ def main():
         t1_fn = dem1_fn_base+'_ts.tif'
         t2_fn = dem2_fn_base+'_ts.tif'
         if os.path.exists(t1_fn) and os.path.exists(t2_fn):
-            constant_dt = False
+            # constant_dt = False
             print("Preparing timestamp arrays")
             t1_ds, t2_ds = warplib.memwarp_multi_fn([t1_fn, t2_fn], extent=dem1_ds, res=dem1_ds)
             print("Loading timestamps into masked arrays")
@@ -70,7 +70,7 @@ def main():
             t1 = timelib.fn_getdatetime(dem1_fn)
             t2 = timelib.fn_getdatetime(dem2_fn)
             if t1 is not None and t2 is not None and t1 != t2:  
-                constant_dt = True
+                # constant_dt = True
                 dt = t2 - t1
                 #Might be better to do this with dateutil - not sure about leap years
                 #from dateutil.relativedelta import relativedelta
