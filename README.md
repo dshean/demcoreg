@@ -4,11 +4,19 @@ Python and shell scripts for co-registration of rasters, specifically digital el
 
 ## Overview
 
+Work in progress...
+
 ## Features
-- Wrapper for ASP pc_align function
+- Automatic determination of static control surfaces
+- Least-squares regression to correct a group of DEMs
 
 ### Some useful command-line utilities (run with no arguments for usage)
+- dem_mask.py - generate mask of snow-free rock surfaces using reflectance, LULC, SNODAS, MODSCAG
+- coreglib.py - implementation of various co-registration algorithms: Nuth and Kaab (2011), normalized cross-correlation with sub-pixel refinement, sum of absolute differences
+- pc_align_wrapper.sh - wrapper around NASA Ames Stereo Pipeline pc_align utility for iterative closest point co-registration 
 - apply_dem_translation.py - update geotransform and apply vertical offset
+- compute_dz.py - simple DEM difference calculation
+- robust_stats.py - print out robust statistics for sampled DEM differences before/after co-registration
 - ...
 
 ## Examples 
