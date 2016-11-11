@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 
 from pygeotools.lib import malib
 
-#This contains the sub-pixel refinement - want to isolate and include here
-import pyprocess
+#This contains the sub-pixel refinement - want to isolate and include here (currently unused)
+#import pyprocess
 
 #The following two functions were extracted from openPIV pyprocess
 def find_first_peak(corr):
@@ -99,8 +99,8 @@ def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
                                     ((peak1_j-1)*cd+peak1_j*c+(peak1_j+1)*cu)/(cd+c+cu))
         
             elif subpixel_method == 'gaussian':
-                subp_peak_position = (peak1_i + ((log(cl)-log(cr))/(2*log(cl) - 4*log(c) + 2*log(cr))),
-                                    peak1_j + ((log(cd)-log(cu))/( 2*log(cd) - 4*log(c) + 2*log(cu)))) 
+                subp_peak_position = (peak1_i + ((np.log(cl)-np.log(cr))/(2*np.log(cl) - 4*np.log(c) + 2*np.log(cr))),
+                                    peak1_j + ((np.log(cd)-np.log(cu))/( 2*np.log(cd) - 4*np.log(c) + 2*np.log(cu)))) 
         
             elif subpixel_method == 'parabolic':
                 subp_peak_position = (peak1_i +  (cl-cr)/(2*cl-4*c+2*cr),
@@ -179,8 +179,8 @@ def compute_offset_ncc(dem1, dem2, plot=False):
     pad = [9, 9]
     #pad = [19, 19]
     #pad = [19, 41]
-    xsearch = (20, 41)
-    ysearch = (-10, 1)
+    #xsearch = (20, 41)
+    #ysearch = (-10, 1)
     stride = 1
     ref = dem1[::stride,::stride]
     #Originally had 2*pad, to prevent edge effects, but this shouldn't be an issue for correlate2d valid
@@ -318,7 +318,6 @@ def func(x, a, b, c):
 
 #This is the Nuth and Kaab (2011) method
 def compute_offset_nuth(dh, slope, aspect):
-    import scipy.stats
     import scipy.optimize as optimization
 
     #mean_dh = dh.mean()

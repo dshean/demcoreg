@@ -102,7 +102,7 @@ def main(argv=None):
         #Make sure the input datasets have the same resolution/extent
         dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_clip_ds, dem2_clip_ds], res='max', extent='intersection')
 
-    dem1_gt = np.array(dem1_clip_ds.GetGeoTransform())
+    # dem1_gt = np.array(dem1_clip_ds.GetGeoTransform())
     dem2_gt = np.array(dem2_clip_ds.GetGeoTransform())
     dem1 = iolib.ds_getma(dem1_clip_ds, 1)
     dem2 = iolib.ds_getma(dem2_clip_ds, 1)
