@@ -8,7 +8,6 @@ import sys
 
 import numpy as np
 
-
 #This takes in the sampled output from pc_align and computes statistics
 #Compute and print robust statistics for before or after samples (csv or tif) from pc_align_wrapper.sh
 
