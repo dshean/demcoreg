@@ -7,8 +7,9 @@ Python and shell scripts for co-registration of rasters, specifically digital el
 Work in progress...
 
 ## Features
+- Multiple co-registration algorithms
 - Automatic determination of static control surfaces
-- Least-squares regression to correct a group of DEMs
+- Least-squares optimization to correct a group of DEMs
 
 ### Some useful command-line utilities (run with no arguments for usage)
 - dem_mask.py - generate mask of snow-free rock surfaces using reflectance, LULC, SNODAS, MODSCAG
