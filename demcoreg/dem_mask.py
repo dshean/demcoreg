@@ -47,6 +47,7 @@ from pygeotools.lib import timelib
 #Note this is a 1.1 GB zipfile
 #Download http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip
 def get_lulc(datadir):
+    #Should use built in urllib functionality here rather than wget
     import wget
     import zipfile
     zip_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10.zip')
@@ -92,6 +93,7 @@ def make_rockmask(nlcd_ds):
         mask *= icemask
     return mask
 
+#This is no longer necessary - use original LULC and create rockmask on the fly only for necessary DEM extent
 def write_rockmask(mask):
     #This writes out 1 for rock, 0 for everything else (ndv)
     print("Writing out")
@@ -122,10 +124,14 @@ def getfile(url, outdir=None):
     if outdir is not None:
         fn = os.path.join(outdir, fn)
     if not os.path.exists(fn):
-        import urllib
+        #Find appropriate urlretrieve for Python 2 and 3
+        try:
+            from urllib.request import urlretrieve
+        except ImportError:
+            from urllib import urlretrieve 
         print("Retrieving: %s" % url)
         #Add progress bar
-        urllib.urlretrieve(url, fn)
+        urlretrieve(url, fn)
     return fn
 
 #Function to get files using requests
@@ -214,7 +220,12 @@ def get_snodas(dem_dt, outdir=None):
 def get_auth():
     import getpass
     from requests.auth import HTTPDigestAuth
-    uname = raw_input("MODSCAG Username:")
+    #This binds raw_input to input for Python 2
+    try:
+       input = raw_input
+    except NameError:
+       pass
+    uname = input("MODSCAG Username:")
     pw = getpass.getpass("MODSCAG Password:")
     auth = HTTPDigestAuth(uname, pw)
     #wget -A'h8v4*snow_fraction.tif' --user=uname --password=pw
@@ -265,20 +276,23 @@ def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h
                             getfile2(modscag_url, auth=auth, outdir=outdir)
                         modscag_fn_list.append(modscag_fn)
                 #Mosaic tiles - currently a hack
-                cmd = ['gdalbuildvrt', '-vrtnodata', '255', out_vrt_fn]
-                cmd.extend(modscag_fn_list)
-                print(cmd)
-                subprocess.call(cmd, shell=False)
-                out_vrt_fn_list.append(out_vrt_fn)
+                if modscag_fn_list:
+                    cmd = ['gdalbuildvrt', '-vrtnodata', '255', out_vrt_fn]
+                    cmd.extend(modscag_fn_list)
+                    print(cmd)
+                    subprocess.call(cmd, shell=False)
+                    out_vrt_fn_list.append(out_vrt_fn)
     return out_vrt_fn_list
 
 #Generate MODSCAG composite products for date range
 def proc_modscag(fn_list, extent=None, t_srs=None):
     #Use cubic spline here for improve upsampling 
     ds_list = warplib.memwarp_multi_fn(fn_list, extent=extent, t_srs=t_srs, r='cubicspline')
+    stack_fn = os.path.splitext(fn_list[0])[0] + '_' + os.path.splitext(os.path.split(fn_list[-1])[1])[0] + '_stack_%i' % len(fn_list) 
     #Create stack here - no need for most of mastack machinery, just make 3D array
     #Mask values greater than 100% (clouds, bad pixels, etc)
     ma_stack = np.ma.array([np.ma.masked_greater(iolib.ds_getma(ds), 100) for ds in np.array(ds_list)], dtype=np.uint8)
+
     stack_count = np.ma.masked_equal(ma_stack.count(axis=0), 0).astype(np.uint8)
     stack_count.set_fill_value(0)
     stack_min = ma_stack.min(axis=0).astype(np.uint8)
@@ -287,7 +301,7 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     stack_max.set_fill_value(0)
     stack_med = np.ma.median(ma_stack, axis=0).astype(np.uint8)
     stack_med.set_fill_value(0)
-    stack_fn = os.path.splitext(fn_list[0])[0] + '_' + os.path.splitext(os.path.split(fn_list[-1])[1])[0] + '_stack_%i' % len(fn_list) 
+
     out_fn = stack_fn + '_count.tif'
     iolib.writeGTiff(stack_count, out_fn, ds_list[0])
     out_fn = stack_fn + '_max.tif'
@@ -296,6 +310,7 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     iolib.writeGTiff(stack_min, out_fn, ds_list[0])
     out_fn = stack_fn + '_med.tif'
     iolib.writeGTiff(stack_med, out_fn, ds_list[0])
+
     ds = gdal.Open(out_fn)
     return ds
 
