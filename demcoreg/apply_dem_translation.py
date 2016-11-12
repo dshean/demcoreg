@@ -125,15 +125,13 @@ def main():
     if out_fmt == "VRT": 
         print("Writing vrt with scaled values")
         dst_fn = out_fn+'.vrt'
-        driver = gdal.GetDriverByName("VRT")
-        dst_ds = driver.CreateCopy(dst_fn, src_ds, 0)
+        dst_ds = iolib.vrt_drv.CreateCopy(dst_fn, src_ds, 0)
         dst_ds.GetRasterBand(1).SetOffset(proj_shift[2])
     else:
         dst_fn = out_fn+'.tif'
-        driver = gdal.GetDriverByName("GTiff")
         #Create might be faster here 
         print("Copying input dataset")
-        dst_ds = driver.CreateCopy(dst_fn, src_ds, 0, options=gdal_opt)
+        dst_ds = iolib.gtif_drv.CreateCopy(dst_fn, src_ds, 0, options=gdal_opt)
         #Apply vertical shift
         dst_b = dst_ds.GetRasterBand(1)
         print("Writing out z-shifted band")
