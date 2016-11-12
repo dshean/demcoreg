@@ -38,15 +38,13 @@ from pygeotools.lib import warplib
 
 from demcoreg import coreglib
 
-memdrv = gdal.GetDriverByName('MEM')
-
 def main(argv=None):
 
     if argv is None:
         argv = sys.argv
 
     if len(argv) < 3 or len(argv) > 4:
-        sys.exit("Usage is %s fixedref_dem source_dem [staticmask.shp]" % argv[0])
+        sys.exit("Usage is %s ref_dem source_dem [staticmask.shp]" % os.path.basename(argv[0]))
 
     #Input DEMs
     #This is the reference
@@ -72,7 +70,7 @@ def main(argv=None):
     dem2_gt_orig = np.array(dem2_ds.GetGeoTransform())
 
     #Check to see if input datasets have the same extent (already clipped) and gt
-    clip = np.any(dem1_gt_orig != dem2_gt_orig) or np.any(geolib.ds_extent(dem1_ds) != geolib.ds_extent(dem2_ds))
+    clip = np.any(dem1_gt_orig != dem2_gt_orig) or geolib.extent_compare(geolib.ds_extent(dem1_ds), geolib.ds_extent(dem2_ds))
 
     #outdir = sys.argv[4]
     #mode = sys.argv[3]
@@ -102,8 +100,9 @@ def main(argv=None):
         #Make sure the input datasets have the same resolution/extent
         dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_clip_ds, dem2_clip_ds], res='max', extent='intersection')
 
-    # dem1_gt = np.array(dem1_clip_ds.GetGeoTransform())
+    #This will be updated geotransform for dem2
     dem2_gt = np.array(dem2_clip_ds.GetGeoTransform())
+
     dem1 = iolib.ds_getma(dem1_clip_ds, 1)
     dem2 = iolib.ds_getma(dem2_clip_ds, 1)
 
@@ -238,13 +237,13 @@ def main(argv=None):
         #xshift_m = 93.6283764258
         #yshift_m = -24
 
+    #Nuth and Kaab (2011)
     elif mode == "nuth":
-        #Only need to generate slope/aspect maps for Nuth method
-
         #NOTE: want to generate slope/aspect maps from the result of the above filter
         dem1_fltr_fn = os.path.splitext(dem1_clip_fn)[0]+'_fltr.tif'
         iolib.writeGTiff(dem1, dem1_fltr_fn, dem1_clip_ds)
 
+        #These just call subprocess - update for new GDAL utility API
         dem1_slope = geolib.gdaldem_slope(dem1_fltr_fn)
         dem1_aspect = geolib.gdaldem_aspect(dem1_fltr_fn)
 
@@ -285,7 +284,7 @@ def main(argv=None):
     print("X shift: ", xshift_m, "Y shift: ", yshift_m)
     
     dem2_gt_shift = np.copy(dem2_gt_orig)
-    #Don't know why these were subtracted before - this may be what Nuth/Kaab output needs
+    #Don't know why these were subtracted before - this may be what Nuth and Kaab output needs?
     #dem2_gt_shift[0] -= xshift_m
     #dem2_gt_shift[3] -= yshift_m
     dem2_gt_shift[0] += xshift_m
@@ -295,7 +294,7 @@ def main(argv=None):
     print("Updated geotransform:", dem2_gt_shift)
 
     #Write out copy of dem2 with updated geotransform
-    dem2_ds_align = memdrv.CreateCopy('', dem2_ds, 1)
+    dem2_ds_align = iolib.mem_drv.CreateCopy('', dem2_ds, 1)
     dem2_ds_align.SetGeoTransform(dem2_gt_shift)
 
     #Write out aligned dataset, but without offset applied
@@ -310,10 +309,8 @@ def main(argv=None):
     write_origdiff = True 
     if write_origdiff:
         print("Writing out original euler difference map for common intersection before alignment")
-        #dst_fn = '%s_%s_orig_dz_eul.tif' % (os.path.splitext(dem1_fn)[0], os.path.splitext(os.path.split(dem2_fn)[1])[0]) 
         dst_fn = '%s_%s_orig_dz_eul.tif' % (os.path.splitext(dem2_fn)[0], os.path.splitext(os.path.split(dem1_fn)[1])[0]) 
         iolib.writeGTiff(diff_euler, dst_fn, dem1_clip_ds)
-        #stats = malib.print_stats(dem1, dem2)
 
     #Write out aligned eulerian difference map
     write_aligndiff = True
@@ -339,9 +336,7 @@ def main(argv=None):
             if mask_fn is not None:
                 print("Clipping input DEMs to input polygon\n")
                 #dem1_clip_ds should remain unchanged, no need to reproduce
-                #dem1_clip_ds = geolib.clip_raster_by_shp(dem1_fn, mask_fn)
                 dem2_clip_ds = geolib.clip_raster_by_shp(align_fn, mask_fn)
-                #dem1_clip_fn = dem1_clip_ds.GetFileList()[0]
                 dem2_clip_fn = dem2_clip_ds.GetFileList()[0]
                 #Need to be careful here, as these are not necessarily set 
                 #Also, I think GDAL has trouble when source file for an open ds disappears
