@@ -15,10 +15,8 @@ import matplotlib.pyplot as plt
 
 from pygeotools.lib import malib
 
-#This contains the sub-pixel refinement - want to isolate and include here (currently unused)
-#import pyprocess
-
 #The following two functions were extracted from openPIV pyprocess
+#Find integer indices for correlation peak
 def find_first_peak(corr):
     """
     Find row and column indices of the first correlation peak.
@@ -48,6 +46,8 @@ def find_first_peak(corr):
     
     return i, j, corr.max()
 
+#From openPIV pyprocess
+#Determine sub-pixel peak position
 def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
     """
     Find subpixel approximation of the correlation peak.
@@ -128,7 +128,6 @@ def compute_offset_sad(dem1, dem2, plot=False):
     kernel = dem2[pad[0]:-pad[0], pad[1]:-pad[1]]
     #Want to pad evenly on both sides, so add +1 here
     m = np.zeros((pad[0]*2+1, pad[1]*2+1))
-    #m = np.zeros((pad[0]*2, pad[1]*2))
    
     i = j = 0
     for i in range(m.shape[0]):
@@ -149,15 +148,12 @@ def compute_offset_sad(dem1, dem2, plot=False):
             """
             #Masked areas will decrease sum! Normalize by count of valid pixels
             m[i,j] = np.ma.abs(diff).sum()/diff.count()
-            #m[i,j] = np.ma.abs(diff).sum()
     
     #Note, we're dealing with min here, so provide -m for spr
     m = -m  
 
     int_argmax = np.array(np.unravel_index(m.argmax(), m.shape))
     int_offset = int_argmax - pad
-    #int_argmin = np.array(np.unravel_index(m.argmin(), m.shape))
-    #int_offset = int_argmin - pad 
     
     sp_argmax = np.array(find_subpixel_peak_position(m, 'parabolic'))
     sp_offset = sp_argmax - pad
@@ -167,67 +163,52 @@ def compute_offset_sad(dem1, dem2, plot=False):
         plt.title('Sum of Absolute Differences')
         plt.imshow(m)
         plt.scatter(*sp_argmax[::-1])
-        #plt.show()
+        plt.show()
 
     return m, int_offset, sp_offset
 
 #This is a decent full-image normalized cross-correlation routine with sub-pixel refinement
 def compute_offset_ncc(dem1, dem2, plot=False): 
     import scipy.signal
-    #Georeferencing should be good to ~10 m
     #Compute max offset given dem spatial resolution
     pad = [9, 9]
-    #pad = [19, 19]
-    #pad = [19, 41]
+    #Should implement arbirary x and y search space
     #xsearch = (20, 41)
     #ysearch = (-10, 1)
     stride = 1
     ref = dem1[::stride,::stride]
-    #Originally had 2*pad, to prevent edge effects, but this shouldn't be an issue for correlate2d valid
-    #kernel = dem2[2*pad[0]:-2*pad[1]:stride, 2*pad[0]:-2*pad[1]:stride]
     kernel = dem2[pad[0]:-pad[1]:stride, pad[0]:-pad[1]:stride]
     #kernel = dem2[-ysearch[0]:-ysearch[1]:stride, xsearch[0]:-xsearch[1]:stride]
-
-    #This provides noise in proper range, but noise propagates to m, peak is in different locations!
-    #ref_noise = ref.mask * (ref.min() + ref.ptp() * np.random.rand(*ref.shape))
-    #kernel_noise = kernel.mask * (kernel.min() + kernel.ptp() * np.random.rand(*kernel.shape))
 
     #Normalize
     ref = (ref - ref.mean()) / ref.std()
     kernel = (kernel - kernel.mean()) / kernel.std()
 
-    #Use astropy.convolve here instead of scipy.correlate?
+    #Consider using astropy.convolve here instead of scipy.correlate?
 
+    print("Adding random noise to masked regions")
     #Generate random noise to fill gaps before correlation in frequency domain
     #Normal distribution N(mean, std^2)
-    
     #ref_noise = ref.mask * ref.std() * np.random.rand(*ref.shape) + ref.mean()
     #kernel_noise = kernel.mask * kernel.std() * np.random.rand(*kernel.shape) + kernel.mean()
-   
     #This provides noise in proper range, but noise propagates to m, peak is in different locations!
     #ref_noise = ref.mask * (ref.min() + ref.ptp() * np.random.rand(*ref.shape))
     #kernel_noise = kernel.mask * (kernel.min() + kernel.ptp() * np.random.rand(*kernel.shape))
-    
-    print("Adding random noise to masked regions")
 
     #This provides a proper normal distribution with mean=0 and std=1
     ref_noise = ref.mask * (np.random.randn(*ref.shape))
     kernel_noise = kernel.mask * (np.random.randn(*kernel.shape))
-    
     #Add the noise
     ref = ref.filled(0) + ref_noise
     kernel = kernel.filled(0) + kernel_noise
 
     print("Running 2D correlation with search window (x,y): %i, %i" % (pad[1], pad[0]))
     #print "Running 2D correlation with search window xrange (%i, %i) and yrange (%i, %i)" % (xsearch + ysearch)
-
     m = scipy.signal.correlate2d(ref, kernel, 'valid')
-    
     #This has memory issues, but ndimage filters can handle nan
     #m = scipy.ndimage.filters.correlate(ref, kernel)
    
     print("Computing sub-pixel peak")
-
     int_argmax = np.array(np.unravel_index(m.argmax(), m.shape))
     int_offset = int_argmax*stride - pad
     #int_offset = int_argmax*stride + np.array([ysearch[0], xsearch[0]]) 
@@ -256,13 +237,13 @@ def compute_offset_ncc(dem1, dem2, plot=False):
 
     print(sp_offset)
 
-    #if plot: 
-    fig = plt.figure()
-    plt.title('NCC offset, parabolic SPR')
-    plt.imshow(m)
-    #plt.scatter(*int_argmax[::-1])
-    plt.scatter(*sp_argmax[::-1])
-    #plt.show()
+    if plot: 
+        fig = plt.figure()
+        plt.title('NCC offset, parabolic SPR')
+        plt.imshow(m)
+        #plt.scatter(*int_argmax[::-1])
+        plt.scatter(*sp_argmax[::-1])
+        plt.show()
 
     return m, int_offset, sp_offset, fig
 
@@ -298,7 +279,6 @@ def bin_by(x, y, nbins=360):
     plt.xticks(np.arange(0,360,30))
     plt.ylabel('dh/tan(slope) (m)')
     plt.xlabel('Aspect (1-deg bins)')
-    plt.show()
 
     plt.figure()
     plt.bar(bins,outlen)
@@ -306,6 +286,7 @@ def bin_by(x, y, nbins=360):
     plt.xticks(np.arange(0,360,30))
     plt.ylabel('Count')
     plt.xlabel('Aspect (1-deg bins)')
+    plt.show()
 
     return outbin, bins
 
@@ -352,11 +333,7 @@ def compute_offset_nuth(dh, slope, aspect):
     print(fit) 
     genplot(xdata, ydata, fit) 
     
-    #print xdata
-    #print ydata
-
     #hist, xedges, yedges = np.histogram2d(xdata, ydata, bins=[360,1])
-    #return xdata, ydata
 
     #Compute median absolute difference, better than stddev?
     y_med = np.median(ydata)
@@ -364,10 +341,6 @@ def compute_offset_nuth(dh, slope, aspect):
     mad_factor = 2
     y_perc = [y_med - y_mad*mad_factor, y_med + y_mad*mad_factor]
 
-    #perc = (1, 99)
-    #y_perc = [scipy.stats.scoreatpercentile(ydata, perc[0]), scipy.stats.scoreatpercentile(ydata, perc[1])]
-
-    #print y_med, y_mad, ydata.mean(), ydata.std(), y_perc
     y_idx = ((ydata >= y_perc[0]) & (ydata <= y_perc[1]))
     ydata_clip = ydata[y_idx]
     xdata_clip = xdata[y_idx]
@@ -376,9 +349,6 @@ def compute_offset_nuth(dh, slope, aspect):
     #xdata = np.arange(0,360,0.01)
     #ydata = f(xdata, 20.0, 130.0, -3.0) + 20*np.random.normal(size=len(xdata))
     
-    #print xdata
-    #print ydata
-
     fit = optimization.curve_fit(func, xdata_clip, ydata_clip, x0)[0]
     print(fit)
     genplot(xdata_clip, ydata_clip, fit) 
@@ -388,9 +358,6 @@ def compute_offset_nuth(dh, slope, aspect):
     genplot(bins, np.ma.median(vals, axis=1), fit) 
     genplot(xdata, ydata, fit) 
     
-    #import ransac_nuth
-    #fit = ransac_nuth(func, xdata, ydata, x0)[0]
-    #optimization.leastsq(f, x0[:], args=(xdata, ydata))
     return fit
 
 def genplot(x, y, fit):
@@ -410,4 +377,3 @@ def genplot(x, y, fit):
     plt.plot(a, f_a, 'b')
     #plt.ylim(-200,200)
     plt.show()
-
