@@ -6,7 +6,7 @@ from distutils.core import setup
 #python setup.py sdist upload
 
 setup(name='demcoreg',
-    version='0.1.1',
+    version='0.1.2',
     description='Utilities for DEM co-registration',
     author='David Shean',
     author_email='dshean@gmail.com',
