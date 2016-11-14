@@ -42,47 +42,57 @@ from pygeotools.lib import warplib
 from pygeotools.lib import geolib
 from pygeotools.lib import timelib
 
-#2011 LULC grids, 30 m
+#2011 Land Use Land Cover (nlcd) grids, 30 m
 #http://www.mrlc.gov/nlcd11_leg.php
-#Note this is a 1.1 GB zipfile
-#Download http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip
-def get_lulc(datadir):
+def get_nlcd(datadir=None):
+    url = 'http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip'
     #Should use built in urllib functionality here rather than wget
     import wget
     import zipfile
+    if datadir is None:
+        datadir = iolib.get_datadir()
     zip_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10.zip')
     if not os.path.exists(zip_fn):
-        print("Downloading LULC data")
+        print("Downloading nlcd data")
+        print(url)
         print("Note: This file is 1.1 GB, please be patient")
-        nlcd_fn_zip = wget.download('http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip', out=datadir)
-    #unzip fails to extract ige file
-    #7za x nlcd_2011_landcover_2011_edition_2014_10_10.zip
-    print("Unzipping: %s" % nlcd_fn_zip)
-    zip_ref = zipfile.ZipFile(nlcd_fn_zip, 'r')
-    zip_ref.extractall(datadir)
+        zip_fn = wget.download(url, out=zip_fn)
+    nlcd_fn = os.path.join(os.path.splitext(zip_fn)[0], 'nlcd_2011_landcover_2011_edition_2014_10_10.img')
+    if not os.path.exists(nlcd_fn):
+        print("Unzipping: %s" % zip_fn)
+        zip_ref = zipfile.ZipFile(zip_fn, 'r')
+        zip_ref.extractall(datadir)
+    else:
+        print("Found existing nlcd: %s" % nlcd_fn)
+    return nlcd_fn
 
-#Create rockmask from LULC and remove glaciers
+#Create rockmask from nlcd and remove glaciers
 #This is painful, but should only have to do it once
-def make_rockmask(nlcd_ds):
-    print("Loading LULC")
+def mask_nlcd(nlcd_ds, valid='rock'):
+    print("Loading nlcd")
     b = nlcd_ds.GetRasterBand(1)
     l = b.ReadAsArray()
     print("Isolating rock")
-    #Original LULC products have nan as ndv
+    #Original nlcd products have nan as ndv
         #12 - ice
         #31 - rock
-        #11 - open water
+        #11 - open water, includes rivers
         #52 - shrub, <5 m tall, >20%
         #42 - evergreeen forest
-    mask = (l==31)
-    #This includes river valleys
-    #mask = ((l==31) or (l==11))
+    #Should use data dictionary here for general masking
+    if valid == 'rock':
+        mask = (l==31)
+    elif valid == 'rock+ice':
+        mask = np.logical_or((l==31),(l==12))
+    else:
+        print("Invalid mask type")
+        mask = None
     l = None
 
-    #Glacier polygons 
+    #Update glacier polygons 
     if False:
         #Use updated glacier outlines to mask glaciers and perennial snowfields 
-        #LULC has an older glacier mask
+        #nlcd has an older glacier mask
         #Downloaded from http://www.glims.org/RGI/rgi50_files/02_rgi50_WesternCanadaUS.zip
         #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
         #Manual selection over study area in QGIS
@@ -93,29 +103,39 @@ def make_rockmask(nlcd_ds):
         mask *= icemask
     return mask
 
-#This is no longer necessary - use original LULC and create rockmask on the fly only for necessary DEM extent
-def write_rockmask(mask):
-    #This writes out 1 for rock, 0 for everything else (ndv)
-    print("Writing out")
-    outmask_fn = os.path.join(datadir, 'rockmask.tif')
+#~2010 global bare ground, 30 m
+#http://landcover.usgs.gov/glc/BareGroundDescriptionAndDownloads.php
+def get_global_bareground(datadir=None):
+    url='http://edcintl.cr.usgs.gov/downloads/sciweb1/shared/gtc/downloads/bare2010.zip'
+    #Should use built in urllib functionality here rather than wget
+    import wget
+    import zipfile
+    if datadir is None:
+        datadir = iolib.get_datadir()
+    zip_fn = os.path.join(datadir, 'bare2010.zip')
+    if not os.path.exists(zip_fn):
+        print("Downloading global bare ground data")
+        print(url)
+        print("Note: This file is 35.8 GB, please be patient")
+        zip_fn = wget.download(url, out=zip_fn)
+    bareground_fn = os.path.join(os.path.splitext(zip_fn)[0], 'bare2010.tif')
+    if not os.path.exists(bareground_fn):
+        print("Unzipping: %s" % zip_fn)
+        zip_ref = zipfile.ZipFile(zip_fn, 'r')
+        zip_ref.extractall(datadir)
+    return bareground_fn
 
-    #This consumes huge amounts of memory - input dataset is 3-band RGB, and is huge 
-    #iolib.writeGTiff(mask, outmask_fn, src_ds=nlcd_ds)
-
-    #Write out here
-    #gdal_dtype = iolib.np_gdal_dtype(mask.dtype)
-    gdal_dtype = 1
-    opt = iolib.gdal_opt
-    #Better for bool
-    opt.remove('COMPRESS=LZW')
-    opt.append('COMPRESS=DEFLATE')
-    print(mask.shape[1], mask.shape[0], mask.shape[1]*mask.shape[0]*8./1E6)
-    dst_ds = iolib.gtif_drv.Create(outmask_fn, mask.shape[1], mask.shape[0], 1, gdal_dtype, options=opt)
-    dst_ds.SetGeoTransform(nlcd_ds.GetGeoTransform())
-    dst_ds.SetProjection(nlcd_ds.GetProjection())
-    dst_ds.GetRasterBand(1).WriteArray(mask)
-    dst_ds.GetRasterBand(1).SetNoDataValue(0)
-    dst_ds = None
+#TODO: this is untested
+def mask_bareground(bg_ds, minperc=80):
+    print("Loading bareground")
+    b = bg_ds.GetRasterBand(1)
+    l = b.ReadAsArray()
+    print("Masking pixels with <%0.1f%% bare ground")
+    if minperc < 0.0 or minperc > 100.0:
+        sys.exit("Invalid bare ground percentage")
+    mask = (l<minperc)
+    l = None
+    return mask
 
 #Function to get files using urllib
 #This works with ftp
@@ -324,10 +344,8 @@ def main():
     #Define top-level directory containing DEM
     topdir = os.getcwd()
 
-    #This directory should contain LULC grid, glacier outlines
-    datadir = os.path.join(topdir, 'demcoreg_data')
-    if not os.path.exists(datadir):
-        os.makedirs(datadir)
+    #This directory should contain nlcd grid, glacier outlines
+    datadir = iolib.get_datadir() 
 
     dem_fn = sys.argv[1]
     dem_ds = gdal.Open(dem_fn)
@@ -339,10 +357,7 @@ def main():
     in_ds_list = [dem_ds,]
 
     if True:
-        nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
-        print nlcd_fn
-        if not os.path.exists(nlcd_fn):
-            get_lulc(datadir)
+        nlcd_fn = get_nlcd(datadir)
         nlcd_ds = gdal.Open(nlcd_fn)
         in_ds_list.append(nlcd_ds)
 
@@ -389,7 +404,7 @@ def main():
     if True:
         #rockmask is already 1 for valid rock, 0 for everything else (ndv)
         #rockmask = ds_list[1].GetRasterBand(1).ReadAsArray()
-        rockmask = make_rockmask(ds_list[1])
+        rockmask = mask_nlcd(ds_list[1], valid='rock')
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
             print("Writing out %s" % out_fn)
