@@ -6,7 +6,7 @@ from distutils.core import setup
 #python setup.py sdist upload
 
 setup(name='demcoreg',
-    version='0.1.0',
+    version='0.1.1',
     description='Utilities for DEM co-registration',
     author='David Shean',
     author_email='dshean@gmail.com',
@@ -14,7 +14,7 @@ setup(name='demcoreg',
     url='https://github.com/dshean/demcoreg',
     packages=['demcoreg'],
     long_description=open('README.md').read(),
-    install_requires=['numpy','gdal','pygeotools'],
+    install_requires=['numpy','gdal','pygeotools','wget'],
     #Note: this will write to /usr/local/bin
     scripts=['demcoreg/pc_align_wrapper.sh', 'demcoreg/apply_dem_translation.py', 'demcoreg/compute_dz.py', 'demcoreg/dem_align.py', 'demcoreg/robust_stats.py', 'demcoreg/dem_mask.py']
 )
