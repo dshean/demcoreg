@@ -220,50 +220,55 @@ def get_snodas(dem_dt, outdir=None):
     import tarfile
     import gzip
 
+    snodas_ds = None
+    snodas_url_str = None
     #Note: unmasked products (beyond CONUS) are only available from 2010-present
-    if dem_dt < datetime(2010,1,1):
+    if dem_dt >= datetime(2003,9,30) and dem_dt < datetime(2010,1,1):
         snodas_url_str = 'ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/masked/%Y/%m_%b/SNODAS_%Y%m%d.tar'
         tar_subfn_str_fmt = 'us_ssmv11036tS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
-    else:
+    elif dem_dt >= datetime(2010,1,1):
         snodas_url_str = 'ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/unmasked/%Y/%m_%b/SNODAS_unmasked_%Y%m%d.tar'
         tar_subfn_str_fmt = './zz_ssmv11036tS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
+    else:
+        print("No SNODAS data available for input date")
 
-    snodas_url = dem_dt.strftime(snodas_url_str)
-    snodas_tar_fn = getfile(snodas_url, outdir=outdir)
-    print("Unpacking")
-    tar = tarfile.open(snodas_tar_fn)
-    #gunzip to extract both dat and Hdr files, tar.gz
-    for ext in ('dat', 'Hdr'):
-        tar_subfn_str = tar_subfn_str_fmt % ext
-        tar_subfn_gz = dem_dt.strftime(tar_subfn_str)
-        tar_subfn = os.path.splitext(tar_subfn_gz)[0]
-        print(tar_subfn)
-        if outdir is not None:
-            tar_subfn = os.path.join(outdir, tar_subfn)
-        if not os.path.exists(tar_subfn):
-            #Should be able to do this without writing intermediate gz to disk
-            tar.extract(tar_subfn_gz)
-            with gzip.open(tar_subfn_gz, 'rb') as f:
-                outf = open(tar_subfn, 'wb')
-                outf.write(f.read())
-                outf.close()
-            os.remove(tar_subfn_gz)
+    if snodas_url_str is not None:
+        snodas_url = dem_dt.strftime(snodas_url_str)
+        snodas_tar_fn = getfile(snodas_url, outdir=outdir)
+        print("Unpacking")
+        tar = tarfile.open(snodas_tar_fn)
+        #gunzip to extract both dat and Hdr files, tar.gz
+        for ext in ('dat', 'Hdr'):
+            tar_subfn_str = tar_subfn_str_fmt % ext
+            tar_subfn_gz = dem_dt.strftime(tar_subfn_str)
+            tar_subfn = os.path.splitext(tar_subfn_gz)[0]
+            print(tar_subfn)
+            if outdir is not None:
+                tar_subfn = os.path.join(outdir, tar_subfn)
+            if not os.path.exists(tar_subfn):
+                #Should be able to do this without writing intermediate gz to disk
+                tar.extract(tar_subfn_gz)
+                with gzip.open(tar_subfn_gz, 'rb') as f:
+                    outf = open(tar_subfn, 'wb')
+                    outf.write(f.read())
+                    outf.close()
+                os.remove(tar_subfn_gz)
 
-    #Need to delete 'Created by module comment' line from Hdr, can contain too many characters
-    bad_str = 'Created by module comment'
-    snodas_fn = tar_subfn
-    f = open(snodas_fn)
-    output = []
-    for line in f:
-        if not bad_str in line:
-            output.append(line)
-    f.close()
-    f = open(snodas_fn, 'w')
-    f.writelines(output)
-    f.close()
+        #Need to delete 'Created by module comment' line from Hdr, can contain too many characters
+        bad_str = 'Created by module comment'
+        snodas_fn = tar_subfn
+        f = open(snodas_fn)
+        output = []
+        for line in f:
+            if not bad_str in line:
+                output.append(line)
+        f.close()
+        f = open(snodas_fn, 'w')
+        f.writelines(output)
+        f.close()
 
-    #Return GDAL dataset for extracted product
-    snodas_ds = gdal.Open(snodas_fn)
+        #Return GDAL dataset for extracted product
+        snodas_ds = gdal.Open(snodas_fn)
     return snodas_ds
 
 #MODSCAG snow cover percentage
@@ -424,16 +429,18 @@ def main():
     #Extract DEM timestamp
     dem_dt = timelib.fn_getdatetime(dem_fn)
 
-    in_ds_list = [dem_ds,]
+    #This will hold datasets for memwarp and output processing
+    from collections import OrderedDict
+    ds_dict = OrderedDict() 
+    ds_dict['dem'] = dem_ds
 
+    ds_dict['lulc'] = None
     #Over CONUS, use 30 m NLCD
     lulc_fn = get_nlcd(datadir)
     lulc_ds = gdal.Open(lulc_fn)
     lulc_geom = geolib.ds_geom(lulc_ds)
     #If the dem geom is within CONUS (nlcd extent), use it
-
     geolib.geom_transform(dem_geom, t_srs=lulc_geom.GetSpatialReference())
-
     if lulc_geom.Contains(dem_geom):
         print("Using NLCD 30m data for rockmask")
         lulc_source = 'nlcd'
@@ -443,21 +450,27 @@ def main():
         lulc_source = 'bareground'
         lulc_fn = get_bareground(datadir)
         lulc_ds = gdal.Open(lulc_fn)
-    in_ds_list.append(lulc_ds)
+    ds_dict['lulc'] = lulc_ds
 
+    ds_dict['snodas'] = None
     if True:
         #Get SNODAS products for DEM timestamp
-        snodas_outdir = os.path.join(datadir, 'snodas')
-        if not os.path.exists(snodas_outdir):
-            os.makedirs(snodas_outdir)
-        snodas_ds = get_snodas(dem_dt, snodas_outdir)
-        in_ds_list.append(snodas_ds)
+        snodas_min_dt = datetime(2003,9,30)
+        if dem_dt >= snodas_min_dt: 
+            snodas_outdir = os.path.join(datadir, 'snodas')
+            if not os.path.exists(snodas_outdir):
+                os.makedirs(snodas_outdir)
+            snodas_ds = get_snodas(dem_dt, snodas_outdir)
+            if snodas_ds is not None:
+                ds_dict['snodas'] = snodas_ds
 
-    if True:
-        #Get MODSCAG products for DEM timestamp
-        #TODO: need global index
-        #These tiles cover CONUS
-        #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+    ds_dict['modscag'] = None
+    #Get MODSCAG products for DEM timestamp
+    #TODO: need global index
+    #These tiles cover CONUS
+    #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+    modscag_min_dt = datetime(2000,2,24)
+    if dem_dt >= modscag_min_dt: 
         tile_list = get_modis_tile_list(dem_geom)
         print(tile_list)
         pad_days=7
@@ -465,9 +478,14 @@ def main():
         if not os.path.exists(modscag_outdir):
             os.makedirs(modscag_outdir)
         modscag_fn_list = get_modscag(dem_dt, modscag_outdir, tile_list, pad_days)
-        modscag_ds = proc_modscag(modscag_fn_list, extent=dem_ds, t_srs=dem_ds)
-        in_ds_list.append(modscag_ds)
+        if modscag_fn_list:
+            modscag_ds = proc_modscag(modscag_fn_list, extent=dem_ds, t_srs=dem_ds)
+            ds_dict['modscag'] = modscag_ds
 
+    #TODO: need to clean this up
+    #Disabled for now
+    #Use reflectance values to estimate snowcover
+    ds_dict['toa'] = None
     if False:
         #Use top of atmosphere scaled reflectance values (0-1)
         dem_dir = os.path.split(os.path.split(dem_fn)[0])[0]
@@ -478,77 +496,86 @@ def main():
             toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         toa_fn = toa_fn[0]
         toa_ds = gdal.Open(toa_fn)
-        in_ds_list.append(toa_ds)
+        ds_dict['toa'] = toa_ds  
+
+    #Cull all of the None ds from the ds_dict
+    for k,v in ds_dict.items():
+        if v is None:
+            del ds_dict[k]
 
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values
-    ds_list = warplib.memwarp_multi(in_ds_list, res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
+    ds_list = warplib.memwarp_multi(ds_dict.values(), res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
+
+    #Update 
+    for n, key in enumerate(ds_dict.keys()):
+        ds_dict[key] = ds_list[n] 
 
     #Need better handling of ds order based on input ds here
 
-    dem = iolib.ds_getma(ds_list[0])
+    dem = iolib.ds_getma(ds_dict['dem'])
     newmask = ~(np.ma.getmaskarray(dem))
 
     #Generate a rockmask
     #Note: these now have RGI 5.0 glacier polygons removed
-    if True:
+    if 'lulc' in ds_dict.keys():
         if lulc_source == 'nlcd':
             #rockmask is already 1 for valid rock, 0 for everything else (ndv)
-            rockmask = mask_nlcd(ds_list[1], valid='rock')
+            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
         elif lulc_source == 'bareground':
-            rockmask = mask_bareground(ds_list[1], minperc=80)
+            rockmask = mask_bareground(ds_dict['lulc'], minperc=80)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(rockmask, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(rockmask, newmask)
 
-    if False:
+    if 'snodas' in ds_dict.keys():
         #SNODAS snow depth filter
         snodas_max_depth = 0.2
         #snow depth values are mm, convert to meters
-        snodas_depth = iolib.ds_getma(ds_list[2])/1000.
+        snodas_depth = iolib.ds_getma(ds_dict['snodas'])/1000.
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(snodas_depth, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(snodas_depth, out_fn, src_ds=ds_dict['dem'])
         snodas_mask = np.ma.masked_greater(snodas_depth, snodas_max_depth)
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_snowdas_mask.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(snodas_mask, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(snodas_mask, newmask)
 
-    if True:
+    if 'modscag' in ds_dict.keys():
         #MODSCAG percent snowcover
         modscag_thresh = 50
-        modscag_perc = iolib.ds_getma(ds_list[3])
+        modscag_perc = iolib.ds_getma(ds_dict['modscag'])
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_perc.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(modscag_perc, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(modscag_perc, out_fn, src_ds=ds_dict['dem'])
         modscag_mask = (modscag_perc.filled(0) >= modscag_thresh) 
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         modscag_mask = ~(modscag_mask)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_mask.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(modscag_mask, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(modscag_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(modscag_mask, newmask)
 
-    if False:
+    if 'toa' in ds_dict.keys():
         #TOA reflectance filter
         toa_thresh = 0.4
-        toa = iolib.ds_getma(ds_list[4])
+        toa = iolib.ds_getma(ds_dict['toa'])
         toa_mask = np.ma.masked_greater(toa, toa_thresh)
         #This should be 1 for valid surfaces, 0 for snowcovered surfaces
         toa_mask = ~(np.ma.getmaskarray(toa_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_toamask.tif'
             print("Writing out %s" % out_fn)
-            iolib.writeGTiff(toa_mask, out_fn, src_ds=dem_ds)
+            iolib.writeGTiff(toa_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(toa_mask, newmask)
 
     if False:
@@ -569,7 +596,7 @@ def main():
     #Write out final mask
     out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
     print("Writing out %s" % out_fn)
-    iolib.writeGTiff(newdem, out_fn, src_ds=dem_ds)
+    iolib.writeGTiff(newdem, out_fn, src_ds=ds_dict['dem'])
 
 if __name__ == "__main__":
     main()
