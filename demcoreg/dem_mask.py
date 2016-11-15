@@ -47,7 +47,7 @@ from pygeotools.lib import timelib
 def get_nlcd(datadir=None):
     if datadir is None:
         datadir = iolib.get_datadir()
-    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
+    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
     if not os.path.exists(nlcd_fn):
         cmd = ['get_nlcd.sh',]
         subprocess.call(cmd)
