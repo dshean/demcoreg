@@ -290,6 +290,23 @@ def get_auth():
     #wget -A'h8v4*snow_fraction.tif' --user=uname --password=pw
     return auth
 
+#Need 
+def get_modis_tile_list(geom):
+    #https://modis-land.gsfc.nasa.gov/MODLAND_grid.html
+    #modis_grid contains dictionary of tile name and WKT polygon ring from bbox
+    from demcoreg import modis_grid
+    modis_dict = modis_grid.modis_dict
+    for key in modis_dict:
+        modis_dict[key] = ogr.CreateGeometryFromWkt(modis_dict[key])
+    geom_dup = geolib.geom_dup(geom)
+    ct = osr.CoordinateTransformation(geom_dup.GetSpatialReference(), geolib.wgs_srs)
+    geom_dup.Transform(ct)
+    tile_list = []
+    for key, val in list(modis_dict.items()):
+        if geom_dup.Intersects(val):
+            tile_list.append(key)
+    return tile_list
+
 #Get MODSCAG products for a date range around a give DEM date 
 #Default tiles cover CONUS
 def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05'), pad_days=7):
@@ -302,51 +319,64 @@ def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h
     out_vrt_fn_list = []
     for dt in dt_list:
         out_vrt_fn = os.path.join(outdir, dt.strftime('%Y%m%d_snow_fraction.vrt'))
-        out_tif_fn = os.path.splitext(out_vrt_fn)[0]+'.tif'
+        #If we already have a vrt and it contains all of the necessary tiles
         if os.path.exists(out_vrt_fn):
-            out_vrt_fn_list.append(out_vrt_fn)
-        else:
-            #Try to use historic products
+            vrt_ds = gdal.Open(out_vrt_fn)
+            if np.all([np.any([tile in sub_fn for sub_fn in vrt_ds.GetFileList()]) for tile in tile_list]):
+                out_vrt_fn_list.append(out_vrt_fn)
+                continue
+        #Otherwise, download missing tiles and rebuilt
+        #Try to use historic products
+        modscag_fn_list = []
+        #Note: not all tiles are available for same date ranges in historic vs. real-time
+        #Need to repeat search tile-by-tile
+        for tile in tile_list:
             modscag_url_str = 'https://snow-data.jpl.nasa.gov/modscag-historic/%Y/%j/' 
             modscag_url_base = dt.strftime(modscag_url_str)
-            print(modscag_url_base)
+            print("Trying: %s" % modscag_url_base)
             r = requests.get(modscag_url_base, auth=auth)
-            if not r.ok:
+            modscag_url_fn = []
+            if r.ok:
+                parsed_html = BeautifulSoup(r.content, "html.parser")
+                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+            if not modscag_url_fn:
                 #Couldn't find historic, try to use real-time products
                 modscag_url_str = 'https://snow-data.jpl.nasa.gov/modscag/%Y/%j/' 
                 modscag_url_base = dt.strftime(modscag_url_str)
-                print(modscag_url_base)
+                print("Trying: %s" % modscag_url_base)
                 r = requests.get(modscag_url_base, auth=auth)
-            if not r.ok:
+            if r.ok: 
+                parsed_html = BeautifulSoup(r.content, "html.parser")
+                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+            if not modscag_url_fn:
                 print("Unable to fetch MODSCAG for %s" % dt)
             else:
+                #OK, we got
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_fn_list = []
                 #Fetch all tiles
-                for tile in tile_list:
-                    modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
-                    if modscag_url_fn:
-                        modscag_url_fn = modscag_url_fn[0]
-                        modscag_url = os.path.join(modscag_url_base, modscag_url_fn)
-                        print(modscag_url)
-                        modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
-                        if not os.path.exists(modscag_fn):
-                            getfile2(modscag_url, auth=auth, outdir=outdir)
-                        modscag_fn_list.append(modscag_fn)
-                #Mosaic tiles - currently a hack
-                if modscag_fn_list:
-                    cmd = ['gdalbuildvrt', '-vrtnodata', '255', out_vrt_fn]
-                    cmd.extend(modscag_fn_list)
-                    print(cmd)
-                    subprocess.call(cmd, shell=False)
-                    out_vrt_fn_list.append(out_vrt_fn)
+                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                if modscag_url_fn:
+                    modscag_url_fn = modscag_url_fn[0]
+                    modscag_url = os.path.join(modscag_url_base, modscag_url_fn)
+                    print(modscag_url)
+                    modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
+                    if not os.path.exists(modscag_fn):
+                        getfile2(modscag_url, auth=auth, outdir=outdir)
+                    modscag_fn_list.append(modscag_fn)
+        #Mosaic tiles - currently a hack
+        if modscag_fn_list:
+            cmd = ['gdalbuildvrt', '-vrtnodata', '255', out_vrt_fn]
+            cmd.extend(modscag_fn_list)
+            print(cmd)
+            subprocess.call(cmd, shell=False)
+            out_vrt_fn_list.append(out_vrt_fn)
     return out_vrt_fn_list
 
 #Generate MODSCAG composite products for date range
 def proc_modscag(fn_list, extent=None, t_srs=None):
     #Use cubic spline here for improve upsampling 
-    ds_list = warplib.memwarp_multi_fn(fn_list, extent=extent, t_srs=t_srs, r='cubicspline')
+    ds_list = warplib.memwarp_multi_fn(fn_list, res='min', extent=extent, t_srs=t_srs, r='cubicspline')
     stack_fn = os.path.splitext(fn_list[0])[0] + '_' + os.path.splitext(os.path.split(fn_list[-1])[1])[0] + '_stack_%i' % len(fn_list) 
     #Create stack here - no need for most of mastack machinery, just make 3D array
     #Mask values greater than 100% (clouds, bad pixels, etc)
@@ -425,7 +455,11 @@ def main():
 
     if True:
         #Get MODSCAG products for DEM timestamp
-        tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+        #TODO: need global index
+        #These tiles cover CONUS
+        #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+        tile_list = get_modis_tile_list(dem_geom)
+        print(tile_list)
         pad_days=7
         modscag_outdir = os.path.join(datadir, 'modscag')
         if not os.path.exists(modscag_outdir):
