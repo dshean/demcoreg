@@ -32,7 +32,7 @@ import os
 import subprocess
 import glob
 
-from osgeo import gdal, osr
+from osgeo import gdal, ogr, osr
 import numpy as np
 
 from datetime import datetime, timedelta
@@ -45,32 +45,97 @@ from pygeotools.lib import timelib
 #2011 Land Use Land Cover (nlcd) grids, 30 m
 #http://www.mrlc.gov/nlcd11_leg.php
 def get_nlcd(datadir=None):
-    url = 'http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip'
-    #Should use built in urllib functionality here rather than wget
-    import wget
-    import zipfile
     if datadir is None:
         datadir = iolib.get_datadir()
-    zip_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10.zip')
-    if not os.path.exists(zip_fn):
-        print("Downloading nlcd data")
-        print(url)
-        print("Note: This file is 1.1 GB, please be patient")
-        zip_fn = wget.download(url, out=zip_fn)
-    nlcd_fn = os.path.join(os.path.splitext(zip_fn)[0], 'nlcd_2011_landcover_2011_edition_2014_10_10.img')
+    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
     if not os.path.exists(nlcd_fn):
-        print("Unzipping: %s" % zip_fn)
-        zip_ref = zipfile.ZipFile(zip_fn, 'r')
-        zip_ref.extractall(datadir)
-    else:
-        print("Found existing nlcd: %s" % nlcd_fn)
+        cmd = ['get_nlcd.sh',]
+        subprocess.call(cmd)
     return nlcd_fn
+
+#~2010 global bare ground, 30 m
+#When unzipped, this is 64 GB!
+#No compression, global tiles (including empty data over ocean)
+#http://landcover.usgs.gov/glc/BareGroundDescriptionAndDownloads.php
+def get_bareground(datadir=None):
+    if datadir is None:
+        datadir = iolib.get_datadir()
+    bg_fn = os.path.join(datadir, 'bare2010/bare2010.vrt')
+    if not os.path.exists(bg_fn):
+        cmd = ['get_bareground.sh',]
+        subprocess.call(cmd)
+    return bg_fn 
+
+#Download latest global RGI glacier db
+#rgi50.zip is 410 MB
+def get_glacier_poly(datadir=None):
+    if datadir is None:
+        datadir = iolib.get_datadir()
+    rgi_fn = os.path.join(datadir, 'rgi50')
+    if not os.path.exists(rgi_fn):
+        cmd = ['get_glacier_poly.sh',]
+        subprocess.call(cmd)
+    return rgi_fn 
+
+#Update glacier polygons
+def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
+    if datadir is None:
+        datadir = iolib.get_datadir()
+    print("Masking glaciers")
+    #Use updated glacier outlines to mask glaciers and perennial snowfields 
+    #nlcd has an older glacier mask
+    #Downloaded from http://www.glims.org/RGI/rgi50_files/02_rgi50_WesternCanadaUS.zip
+    #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
+    #Manual selection over study area in QGIS
+    #Use updated 24k glacier outlines
+    #glac_shp_fn = os.path.join(datadir, '24k_selection_32610.shp')
+
+    #Get ds envelope 
+    dem_geom = geolib.ds_geom(ds)
+    dem_geom_copy = geolib.geom_dup(dem_geom)
+
+    #glac_shp_fn_list = glob.glob(os.path.join(glac_shp_dir,'*_rgi50_*.shp'))
+    if glac_shp_fn is None:
+        glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
+        glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
+
+    if not os.path.exists(glac_shp_fn):
+        print("Unable to locate glacier shp: %s" % glac_shp_fn)
+    else:
+        print("Found glacier shp: %s" % glac_shp_fn)
+
+    glac_shp_ds = ogr.Open(glac_shp_fn)
+    glac_shp_lyr = glac_shp_ds.GetLayer()
+    #This is [minlon, maxlon, minlat, maxlat)
+    glac_shp_geom = geolib.bbox2geom(glac_shp_lyr.GetExtent())
+    #Transform dem_geom
+    geolib.geom_transform(dem_geom_copy, t_srs=glac_shp_lyr.GetSpatialRef())
+    icemask = None
+    if glac_shp_geom.Intersects(dem_geom_copy):
+        #This is a hack that creates a new shp with ds srs using ogr2ogr, limiting to spat 
+        temp_shp_fn = os.path.join(glac_shp_dir, 'temp.shp')
+        te = dem_geom_copy.GetEnvelope()
+        te = (te[0],te[2],te[1],te[3])
+        cmd = ['ogr2ogr', '-t_srs', "%s" % ds.GetProjection(), '-spat']
+        cmd.extend([str(i) for i in te])
+        cmd.extend([temp_shp_fn, glac_shp_fn])  
+        print(cmd)
+        subprocess.call(cmd)
+        #Since we're using rgi05_merge.shp, just need to do this once
+        #This burns 1 for valid pixels, 0 elsewhere
+        icemask = geolib.shp2array(temp_shp_fn, r_ds=ds)
+        #If looping through multiple shp (ie different RGI regions)
+        #if icemask is None:
+            #icemask = geolib.shp2array(temp_shp_fn, r_ds=ds)
+        #else:
+        #    icemask = np.logical_or(icemask, geolib.shp2array(temp_shp_fn, r_ds=ds).astype(bool))
+    return icemask
 
 #Create rockmask from nlcd and remove glaciers
 #This is painful, but should only have to do it once
-def mask_nlcd(nlcd_ds, valid='rock'):
+def mask_nlcd(ds, valid='rock'):
     print("Loading nlcd")
-    b = nlcd_ds.GetRasterBand(1)
+    b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
     print("Isolating rock")
     #Original nlcd products have nan as ndv
@@ -89,52 +154,26 @@ def mask_nlcd(nlcd_ds, valid='rock'):
         mask = None
     l = None
 
-    #Update glacier polygons 
-    if False:
-        #Use updated glacier outlines to mask glaciers and perennial snowfields 
-        #nlcd has an older glacier mask
-        #Downloaded from http://www.glims.org/RGI/rgi50_files/02_rgi50_WesternCanadaUS.zip
-        #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
-        #Manual selection over study area in QGIS
-        #Use updated 24k glacier outlines
-        glac_shp_fn = os.path.join(datadir, '24k_selection_32610.shp')
-        print("Masking glaciers")
-        icemask = geolib.shp2array(glac_shp_fn, r_ds=nlcd_ds)
+    icemask = mask_glaciers(ds)
+    if icemask is not None:
         mask *= icemask
+
     return mask
 
-#~2010 global bare ground, 30 m
-#http://landcover.usgs.gov/glc/BareGroundDescriptionAndDownloads.php
-def get_global_bareground(datadir=None):
-    url='http://edcintl.cr.usgs.gov/downloads/sciweb1/shared/gtc/downloads/bare2010.zip'
-    #Should use built in urllib functionality here rather than wget
-    import wget
-    import zipfile
-    if datadir is None:
-        datadir = iolib.get_datadir()
-    zip_fn = os.path.join(datadir, 'bare2010.zip')
-    if not os.path.exists(zip_fn):
-        print("Downloading global bare ground data")
-        print(url)
-        print("Note: This file is 35.8 GB, please be patient")
-        zip_fn = wget.download(url, out=zip_fn)
-    bareground_fn = os.path.join(os.path.splitext(zip_fn)[0], 'bare2010.tif')
-    if not os.path.exists(bareground_fn):
-        print("Unzipping: %s" % zip_fn)
-        zip_ref = zipfile.ZipFile(zip_fn, 'r')
-        zip_ref.extractall(datadir)
-    return bareground_fn
-
-#TODO: this is untested
-def mask_bareground(bg_ds, minperc=80):
+def mask_bareground(ds, minperc=80):
     print("Loading bareground")
-    b = bg_ds.GetRasterBand(1)
+    b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
-    print("Masking pixels with <%0.1f%% bare ground")
+    print("Masking pixels with <%0.1f%% bare ground" % minperc)
     if minperc < 0.0 or minperc > 100.0:
         sys.exit("Invalid bare ground percentage")
-    mask = (l<minperc)
+    mask = (l>minperc)
     l = None
+
+    icemask = mask_glaciers(ds)
+    if icemask is not None:
+        mask *= icemask
+
     return mask
 
 #Function to get files using urllib
@@ -349,6 +388,7 @@ def main():
 
     dem_fn = sys.argv[1]
     dem_ds = gdal.Open(dem_fn)
+    dem_geom = geolib.ds_geom(dem_ds)
     print(dem_fn)
 
     #Extract DEM timestamp
@@ -356,10 +396,24 @@ def main():
 
     in_ds_list = [dem_ds,]
 
-    if True:
-        nlcd_fn = get_nlcd(datadir)
-        nlcd_ds = gdal.Open(nlcd_fn)
-        in_ds_list.append(nlcd_ds)
+    #Over CONUS, use 30 m NLCD
+    lulc_fn = get_nlcd(datadir)
+    lulc_ds = gdal.Open(lulc_fn)
+    lulc_geom = geolib.ds_geom(lulc_ds)
+    #If the dem geom is within CONUS (nlcd extent), use it
+
+    geolib.geom_transform(dem_geom, t_srs=lulc_geom.GetSpatialReference())
+
+    if lulc_geom.Contains(dem_geom):
+        print("Using NLCD 30m data for rockmask")
+        lulc_source = 'nlcd'
+    else:
+        print("Using global 30m bare ground data for rockmask")
+        #Otherwise for Global, use 30 m Bare Earth percentage 
+        lulc_source = 'bareground'
+        lulc_fn = get_bareground(datadir)
+        lulc_ds = gdal.Open(lulc_fn)
+    in_ds_list.append(lulc_ds)
 
     if True:
         #Get SNODAS products for DEM timestamp
@@ -396,15 +450,19 @@ def main():
     #Note: use cubicspline here to avoid artifacts with negative values
     ds_list = warplib.memwarp_multi(in_ds_list, res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
 
-    #Need better handling of ds order here
+    #Need better handling of ds order based on input ds here
 
     dem = iolib.ds_getma(ds_list[0])
     newmask = ~(np.ma.getmaskarray(dem))
 
+    #Generate a rockmask
+    #Note: these now have RGI 5.0 glacier polygons removed
     if True:
-        #rockmask is already 1 for valid rock, 0 for everything else (ndv)
-        #rockmask = ds_list[1].GetRasterBand(1).ReadAsArray()
-        rockmask = mask_nlcd(ds_list[1], valid='rock')
+        if lulc_source == 'nlcd':
+            #rockmask is already 1 for valid rock, 0 for everything else (ndv)
+            rockmask = mask_nlcd(ds_list[1], valid='rock')
+        elif lulc_source == 'bareground':
+            rockmask = mask_bareground(ds_list[1], minperc=80)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
             print("Writing out %s" % out_fn)
