@@ -7,8 +7,8 @@ Python and shell scripts for co-registration of rasters, specifically digital el
 Work in progress...
 
 ## Features
-- Multiple co-registration algorithms
-- Automatic determination of static control surfaces
+- Multiple co-registration algorithms (ICP, NCC, SAD, NuthandKaab2011)
+- Automatic determination of static control surfaces (i.e., exposed bedrock) for arbitrary DEM timestamp
 - Least-squares optimization to correct a group of DEMs
 
 ### Some useful command-line utilities (run with no arguments for usage)
