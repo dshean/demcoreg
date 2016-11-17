@@ -26,8 +26,8 @@ def main():
         dz_m = dz_m[~np.isnan(dz_m)]
     #If pc_align was run with reference grid, then load the dz raster
     elif 'tif' in ext: 
-        from pygeotools.lib import malib
-        a = malib.fn_getma(f)
+        from pygeotools.lib import iolib
+        a = iolib.fn_getma(f)
         dz_m = a.compressed()
     else:
         sys.exit('Unsupported input type')
