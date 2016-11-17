@@ -11,7 +11,6 @@ import sys, os
 import numpy as np
 from osgeo import gdal, osr
 
-from pygeotools.lib import geolib
 from pygeotools.lib import iolib
 
 #This should probably be moved to geolib
@@ -32,8 +31,6 @@ def get_proj_shift(src_c, src_shift, s_srs, t_srs, inv_trans=False):
     return proj_shift
 
 def main():
-    gdal_opt = ['COMPRESS=LZW', 'TILED=YES', 'BIGTIFF=IF_SAFER']
-
     if len(sys.argv) != 3:
         sys.exit("Usage: %s dem.tif pc_align.log" % os.path.basename(sys.argv[0]))
 
@@ -85,17 +82,16 @@ def main():
     llz_c = llz_c[i]
     llz_shift = llz_shift[i]
 
-    #s_srs = geolib.wgs_srs
-    #src_c = llz_c 
-    #src_shift = llz_shift
+    ecef_srs=osr.SpatialReference()
+    ecef_srs.ImportFromEPSG(4978)
 
-    s_srs = geolib.ecef_srs
+    s_srs = ecef_srs
     src_c = ecef_c
     src_shift = ecef_shift
-    #src_c_shift = src_c + src_shift
 
     #Determine shift in original dataset coords
-    t_srs = geolib.get_ds_srs(src_ds)
+    t_srs = osr.SpatialReference()
+    t_srs.ImportFromWkt(src_ds.GetProjectionRef())
     if t_srs is None:
         sys.exit("Unable to determine src_ds proj")
     proj_shift = get_proj_shift(src_c, src_shift, s_srs, t_srs, inv_trans)
@@ -131,7 +127,7 @@ def main():
         dst_fn = out_fn+'.tif'
         #Create might be faster here 
         print("Copying input dataset")
-        dst_ds = iolib.gtif_drv.CreateCopy(dst_fn, src_ds, 0, options=gdal_opt)
+        dst_ds = iolib.gtif_drv.CreateCopy(dst_fn, src_ds, 0, options=iolib.gdal_opt)
         #Apply vertical shift
         dst_b = dst_ds.GetRasterBand(1)
         print("Writing out z-shifted band")
