@@ -7,6 +7,7 @@
 #This offers significant performance gains over writing out new PC and running point2dem
 
 import sys, os
+import argparse
 
 import numpy as np
 from osgeo import gdal, osr
@@ -31,11 +32,17 @@ def get_proj_shift(src_c, src_shift, s_srs, t_srs, inv_trans=False):
     return proj_shift
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dem', type=str, help='Dem tif filename')
+    parser.add_argument('log', type=str, help='pc_align log filename')
+    parser.add_argument('-of', default=None, help='Output folder')
+    args = parser.parse_args()
+    
     if len(sys.argv) != 3:
         sys.exit("Usage: %s dem.tif pc_align.log" % os.path.basename(sys.argv[0]))
 
-    src_fn = sys.argv[1]
-    log_fn = sys.argv[2]
+    src_fn = args.dem
+    log_fn = args.log
 
     #Prepare input image
     src_ds = gdal.Open(src_fn)
@@ -117,7 +124,10 @@ def main():
 
     #out_fmt = "VRT"
     out_fmt = "TIF"
-    out_fn = os.path.splitext(src_fn)[0]+'_trans'
+    if args.of is None:
+        out_fn = os.path.splitext(src_fn)[0]+'_trans'
+    else:
+        out_fn = args.of + os.path.split(os.path.splitext(src_fn)[0])[0] + '_trans'
     if out_fmt == "VRT": 
         print("Writing vrt with scaled values")
         dst_fn = out_fn+'.vrt'
