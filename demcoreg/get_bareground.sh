@@ -28,7 +28,7 @@ be_vrt_fn='bare2010/bare2010.vrt'
 if [ ! -e $be_fn ] ; then
     url='http://edcintl.cr.usgs.gov/downloads/sciweb1/shared/gtc/downloads/bare2010.zip'
     echo "Downloading $be_zip_fn"
-    wget $url $be_zip_fn
+    wget -O $be_zip_fn $url 
 fi
 
 if [ ! -d $be_fn ] ; then

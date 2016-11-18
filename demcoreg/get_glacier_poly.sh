@@ -3,8 +3,8 @@
 #David Shean
 #dshean@gmail.com
 
-#This script will download global RGI glacier outlines 
-#Needed for various masking applicaitons
+#This script will download and prepare global RGI glacier outlines
+#212248 features in 15 regions
 
 if [ -z "$DATADIR" ] ; then
     export DATADIR=$HOME/data
@@ -19,7 +19,7 @@ rgi_fn='rgi50'
 if [ ! -e $rgi_zip_fn ] ; then
     url='http://www.glims.org/RGI/rgi50_files/rgi50.zip'
     echo "Downloading $rgi_zip_fn"
-    wget $url $rgi_zip_fn
+    wget -O $rgi_zip_fn $url
 fi
 
 if [ ! -d $rgi_fn ] ; then
@@ -28,7 +28,19 @@ if [ ! -d $rgi_fn ] ; then
     unzip $rgi_zip_fn -d $rgi_fn
 fi
 
-parallel "unzip {} -d $rgi_fn/regions" ::: $(ls $rgi_fn/*.zip | grep -v ^00_)
+if [ ! -d $rgi_fn/regions ] ; then
+    mkdir $rgi_fn/regions
+    #Should check to see if GNU Parallel is installed, otherwise use for loop
+    parallel "unzip {} -d $rgi_fn/regions" ::: $(ls $rgi_fn/*.zip | grep -v ^00_)
+fi
 
 cd $rgi_fn/regions
+mv 00_rgi40* ../
+
+#Merge regions for global shp
+#if [ ! -e rgi50_merge.shp ] ; then
+echo "Merging region shp for global shp"
 ogr_merge.sh rgi50_merge.shp *_rgi50_*shp
+#fi
+
+echo $rgi_fn/regions/rgi50_merge.shp

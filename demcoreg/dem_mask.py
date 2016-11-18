@@ -71,7 +71,7 @@ def get_bareground(datadir=None):
 def get_glacier_poly(datadir=None):
     if datadir is None:
         datadir = iolib.get_datadir()
-    rgi_fn = os.path.join(datadir, 'rgi50')
+    rgi_fn = os.path.join(datadir, 'rgi50/regions/rgi50_merge.shp')
     if not os.path.exists(rgi_fn):
         cmd = ['get_glacier_poly.sh',]
         subprocess.call(cmd)

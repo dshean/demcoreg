@@ -23,7 +23,7 @@ nlcd_fn='nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_ed
 if [ ! -e $nlcd_zip_fn ] ; then
     echo "Downloading $nlcd_zip_fn"
     url='http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip'
-    wget $url $nlcd_zip_fn
+    wget -O $nlcd_zip_fn $url 
 fi
 
 if [ ! -e $nlcd_fn ] ; then
@@ -31,7 +31,9 @@ if [ ! -e $nlcd_fn ] ; then
     unzip $nlcd_zip_fn
     #Can save a lot of disk space compressing the original ArcGrid img and deleting overviews
     #Input is ~17 GB, output is 1.1 GB
-    gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
-    rm -r $(dirname $nlcd_fn)/*
-    mv $DATADIR/temp.tif $nlcd_fn
+    #Note: there are now issues with missing .ige
+    #TODO: fix this
+    echo gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
+    #rm -r $(dirname $nlcd_fn)/*
+    #mv $DATADIR/temp.tif $nlcd_fn
 fi
