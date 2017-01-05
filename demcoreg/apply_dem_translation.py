@@ -75,6 +75,7 @@ def main():
     #inv_trans_str = '--save-inv-transformed-reference-points'
     inv_trans_str = 'trans_reference: true'
 
+    llz_c = None
     log = open(log_fn)
     for line in log:
         if inv_trans_str in line:
@@ -91,6 +92,9 @@ def main():
             llz_shift = np.fromstring(line.split('Vector3')[1][1:-1], sep=',')
             break
     log.close()
+
+    if llz_c is None:
+        sys.exit("Log file does not contain necessary translation information: %s" % log_fn)
 
     #Reorder lat,lon,z to lon,lat,z (x,y,z)
     i = [1, 0, 2]
@@ -151,6 +155,7 @@ def main():
 
     dst_gt = list(dst_ds.GetGeoTransform())
     #Apply horizontal shift directly to geotransform
+    print("Updating geotransform with horizontal shift")
     dst_gt[0] += proj_shift[0]
     dst_gt[3] += proj_shift[1] 
     dst_ds.SetGeoTransform(dst_gt)
