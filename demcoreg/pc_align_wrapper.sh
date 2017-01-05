@@ -45,7 +45,7 @@ fi
 rot=false
 
 #Set number of threads to use
-ncpu=8
+ncpu=4
 
 #Number of iterations (default 1000)
 n_iter=2000
@@ -54,8 +54,8 @@ n_iter=2000
 #NOTE: can extract this from last column of input csv (v*dt)
 #max_disp=1000
 #max_disp=200
-max_disp=40
-#max_disp=20
+#max_disp=40
+max_disp=10
 
 pc_align_opt=''
 point2dem_opt=''
@@ -282,8 +282,7 @@ if $usemask ; then
         if [ "${mask##*.}" == "tif" ] ; then
             if [ ! -e ${dem%.*}_masked.tif ] ; then
                 echo; echo "Applying mask to input DEM"
-                cmd="apply_mask.py $dem $mask"
-                #cmd="apply_mask_new.py $dem $mask"
+                cmd="apply_mask.py -extent raster $dem $mask"
                 runcmd "$cmd" $logfile
                 echo
             fi
