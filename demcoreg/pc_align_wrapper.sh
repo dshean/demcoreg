@@ -267,6 +267,12 @@ outdir=${dem_orig%.*}_align
 if [ "$ref_type" == "grid" ] ; then
     outdir=${dem_orig%.*}_grid_align
 fi
+
+if [ -d $outdir] ; then
+    echo "Output directory already exists: $outdir"
+    exit
+fi
+
 mkdir -pv $outdir
 out=$outdir/$(basename ${dem_orig%.*})
 pc_align_opt+=" -o $out"
