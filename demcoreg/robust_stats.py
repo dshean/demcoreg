@@ -35,10 +35,12 @@ def main():
     dz_m_abs = np.abs(dz_m)
 
     #Extract fn date
-    d = f[0:13]
-    print("Date: %s" % d)
+    #d = f[0:13]
+    #print("Date: %s" % d)
 
-    print("Count: %i" % (a.shape[0] - 1))
+    #print("Filename: %s" % f)
+
+    print("Count: %i" % (dz_m.shape[0] - 1))
 
     rmse = np.sqrt(np.sum(dz_m**2)/dz_m.size)
     print("RMSE: %0.3f" % rmse)
