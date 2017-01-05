@@ -6,6 +6,7 @@
 #This will co-register a large batch of DEMs
 
 #Run tpfe1 or bro node
+#To check out devel bro node:
 #qsub ~/bin/devel.pbs
 #cd topdir
 
