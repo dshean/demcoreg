@@ -8,24 +8,10 @@
 #This was written for co-registration of CONUS DEMs
 #Assumes that LULC, SNODAS, MODSCAG products are available for input DEM location
 
-"""
-General co-registration workflow
-
-#Pregenerate top-of-atmosphere reflectance 
-#https://github.com/dshean/dgtools 
-parallel --delay 3 '~/src/demtools/toa.sh {}' ::: {WV,GE}*
-
-#Then run this tool for each low-res input DEM
-for i in */dem*/*32m.tif; do dem_mask.py $i; done
-
-#Finally, run pc_align
-ref=ned.tif
-apply_mask.py ${i%.*}_ref.tif $ref
-ref=${ref%.*}_masked.tif
-for i in */dem*/*_2m.tif; do pc_align_wrapper.sh $ref $i; done
-"""
-
 #Dependencies: wget, requests, bs4
+
+#To do: 
+#Add minium valid pixel count check - if not met, relax some criteria
 
 import sys
 import os
@@ -47,7 +33,7 @@ from pygeotools.lib import timelib
 def get_nlcd(datadir=None):
     if datadir is None:
         datadir = iolib.get_datadir()
-    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
+    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
     if not os.path.exists(nlcd_fn):
         cmd = ['get_nlcd.sh',]
         subprocess.call(cmd)
@@ -90,10 +76,6 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
     #Use updated 24k glacier outlines
     #glac_shp_fn = os.path.join(datadir, '24k_selection_32610.shp')
 
-    #Get ds envelope 
-    dem_geom = geolib.ds_geom(ds)
-    dem_geom_copy = geolib.geom_dup(dem_geom)
-
     #glac_shp_fn_list = glob.glob(os.path.join(glac_shp_dir,'*_rgi50_*.shp'))
     if glac_shp_fn is None:
         glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
@@ -103,6 +85,11 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
         print("Unable to locate glacier shp: %s" % glac_shp_fn)
     else:
         print("Found glacier shp: %s" % glac_shp_fn)
+
+    """
+    #Get ds envelope 
+    dem_geom = geolib.ds_geom(ds)
+    dem_geom_copy = geolib.geom_dup(dem_geom)
 
     glac_shp_ds = ogr.Open(glac_shp_fn)
     glac_shp_lyr = glac_shp_ds.GetLayer()
@@ -129,6 +116,10 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
             #icemask = geolib.shp2array(temp_shp_fn, r_ds=ds)
         #else:
         #    icemask = np.logical_or(icemask, geolib.shp2array(temp_shp_fn, r_ds=ds).astype(bool))
+    """
+
+    #All of the proj, extent, handling should now occur in shp2array
+    icemask = geolib.shp2array(glac_shp_fn, ds)
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
@@ -441,6 +432,7 @@ def main():
     lulc_geom = geolib.ds_geom(lulc_ds)
     #If the dem geom is within CONUS (nlcd extent), use it
     geolib.geom_transform(dem_geom, t_srs=lulc_geom.GetSpatialReference())
+
     if lulc_geom.Contains(dem_geom):
         print("Using NLCD 30m data for rockmask")
         lulc_source = 'nlcd'
@@ -453,7 +445,7 @@ def main():
     ds_dict['lulc'] = lulc_ds
 
     ds_dict['snodas'] = None
-    if True:
+    if False:
         #Get SNODAS products for DEM timestamp
         snodas_min_dt = datetime(2003,9,30)
         if dem_dt >= snodas_min_dt: 
@@ -466,21 +458,21 @@ def main():
 
     ds_dict['modscag'] = None
     #Get MODSCAG products for DEM timestamp
-    #TODO: need global index
     #These tiles cover CONUS
     #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
-    modscag_min_dt = datetime(2000,2,24)
-    if dem_dt >= modscag_min_dt: 
-        tile_list = get_modis_tile_list(dem_geom)
-        print(tile_list)
-        pad_days=7
-        modscag_outdir = os.path.join(datadir, 'modscag')
-        if not os.path.exists(modscag_outdir):
-            os.makedirs(modscag_outdir)
-        modscag_fn_list = get_modscag(dem_dt, modscag_outdir, tile_list, pad_days)
-        if modscag_fn_list:
-            modscag_ds = proc_modscag(modscag_fn_list, extent=dem_ds, t_srs=dem_ds)
-            ds_dict['modscag'] = modscag_ds
+    if False:
+        modscag_min_dt = datetime(2000,2,24)
+        if dem_dt >= modscag_min_dt: 
+            tile_list = get_modis_tile_list(dem_geom)
+            print(tile_list)
+            pad_days=7
+            modscag_outdir = os.path.join(datadir, 'modscag')
+            if not os.path.exists(modscag_outdir):
+                os.makedirs(modscag_outdir)
+            modscag_fn_list = get_modscag(dem_dt, modscag_outdir, tile_list, pad_days)
+            if modscag_fn_list:
+                modscag_ds = proc_modscag(modscag_fn_list, extent=dem_ds, t_srs=dem_ds)
+                ds_dict['modscag'] = modscag_ds
 
     #TODO: need to clean this up
     #Disabled for now
