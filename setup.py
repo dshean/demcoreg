@@ -18,7 +18,7 @@ setup(name='demcoreg',
     #Note: this will write to /usr/local/bin
     scripts=['demcoreg/pc_align_wrapper.sh', 'demcoreg/apply_dem_translation.py', \
             'demcoreg/compute_dz.py', 'demcoreg/dem_align.py', 'demcoreg/robust_stats.py', \
-            'demcoreg/dem_mask.py', \
+            'demcoreg/dem_mask.py', 'demcoreg/dem_coreg.sh', 'demcoreg/dem_coreg_all.sh', \
             'demcoreg/get_nlcd.sh', 'demcoreg/get_bareground.sh', 'demcoreg/get_glacier_poly.sh']
 )
 
