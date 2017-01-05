@@ -60,7 +60,7 @@ if [ -e $log ] ; then
     if grep -q 'Translation vector' $log ; then
         apply_dem_translation.py ${dembase}-DEM_32m.tif $log
         apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-        ln -s $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
+        ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
         compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
     fi
 fi
