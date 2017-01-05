@@ -32,20 +32,28 @@ def get_proj_shift(src_c, src_shift, s_srs, t_srs, inv_trans=False):
     return proj_shift
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('dem', type=str, help='Dem tif filename')
-    parser.add_argument('log', type=str, help='pc_align log filename')
-    parser.add_argument('-of', default=None, help='Output folder')
+    parser = argparse.ArgumentParser(description="Apply existing pc_align translation to a DEM")
+    parser.add_argument('dem_fn', type=str, help='DEM filename')
+    parser.add_argument('log_fn', type=str, help='pc_align log filename')
+    parser.add_argument('-outdir', default=None, help='Output directory')
     args = parser.parse_args()
-    
-    if len(sys.argv) != 3:
-        sys.exit("Usage: %s dem.tif pc_align.log" % os.path.basename(sys.argv[0]))
+  
+    dem_fn = args.dem_fn
+    log_fn = args.log_fn
+    outdir = args.outdir
 
-    src_fn = args.dem
-    log_fn = args.log
+    if not iolib.fn_check(dem_fn): 
+        sys.exit("Unable to find input DEM: %s" % dem_fn)
+    if not iolib.fn_check(log_fn):
+        sys.exit("Unable to find input log: %s" % log_fn)
+    if outdir is not None:
+        if not iolib.fn_check(outdir):
+            os.makedirs(outdir)
+    else:
+        outdir = os.path.dirname(dem_fn)
 
     #Prepare input image
-    src_ds = gdal.Open(src_fn)
+    src_ds = gdal.Open(dem_fn)
     print("Loading input DEM")
     src_a = iolib.ds_getma(src_ds)
     #Overhead for np.ma may be unnecessary here, could just load as np.array
@@ -124,10 +132,7 @@ def main():
 
     #out_fmt = "VRT"
     out_fmt = "TIF"
-    if args.of is None:
-        out_fn = os.path.splitext(src_fn)[0]+'_trans'
-    else:
-        out_fn = args.of + os.path.split(os.path.splitext(src_fn)[0])[0] + '_trans'
+    out_fn = os.path.join(outdir, os.path.split(os.path.splitext(dem_fn)[0])[1] + '_trans')
     if out_fmt == "VRT": 
         print("Writing vrt with scaled values")
         dst_fn = out_fn+'.vrt'
