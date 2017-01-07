@@ -11,20 +11,19 @@
 #cd topdir
 
 #Default is for all WV/GE/QB subdir
-#list=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
-list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif | head -16)
-list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}' | head -16)
+list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif)
+list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
 
 #If we have existing orthoimages, compute top-of-atmosphere reflectance 
 #Uses toa.sh, toa.py, and dglib from https://github.com/dshean/dgtools 
-parallel --jobs 16 --delay 3 'toa.sh {}' ::: $list_dir
+#parallel --jobs 16 --delay 2 'toa.sh {}' ::: $list_dir
 
 #Clean up existing masks
 #rm */*/*-DEM_32m_ref.tif */*/*-DEM_32m_*mask.tif */*/*-DEM_32m_*perc.tif
 
 #Now create masks for each 32m DEM
 #Check settings for dem_mask - MODSCAG, SNODAS, TOA, etc.
-parallel --jobs 16 --delay 3 'dem_mask.py {}' ::: $list_32m
+parallel --jobs 16 --delay 1 'dem_mask.py {}' ::: $list_32m
 
 #Clean up existing pc_align runs
 #rm -r */*/*align */*/*trans.tif */*/*trans_dz_eul.tif 
