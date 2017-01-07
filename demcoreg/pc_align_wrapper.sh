@@ -55,7 +55,7 @@ n_iter=2000
 #max_disp=1000
 #max_disp=200
 #max_disp=40
-max_disp=10
+max_disp=30
 
 pc_align_opt=''
 point2dem_opt=''
@@ -268,7 +268,7 @@ if [ "$ref_type" == "grid" ] ; then
     outdir=${dem_orig%.*}_grid_align
 fi
 
-if [ -d $outdir] ; then
+if [ -d $outdir ] ; then
     echo "Output directory already exists: $outdir"
     exit
 fi
@@ -322,7 +322,7 @@ if $trans_source ; then
     fi
 
     #Want to load as many ref points as possible
-    #pc_align_opt+=' --max-num-reference-points 10000000 --max-num-source-points 10000000'
+    pc_align_opt+=' --max-num-reference-points 10000000 --max-num-source-points 10000000'
 
     #if [ ! -e ${out}-trans_source.tif ] ; then
     if [ ! -e ${out}-trans_source-end_errors.csv ] ; then
@@ -392,8 +392,7 @@ if $trans_reference ; then
 
     #Ref should always be as dense as possible
     #Ref is now DEM, want to load as many src points as possible
-    #pc_align_opt+=' --max-num-reference-points 100000 --num-source-points 100000000'
-    #pc_align_opt+=' --max-num-reference-points 10000000 --max-num-source-points 10000000'
+    pc_align_opt+=' --max-num-reference-points 10000000 --max-num-source-points 10000000'
 
     if [ ! -e ${out}-trans_reference-end_errors.csv ] ; then
         cmd="pc_align $pc_align_opt $dem $atm"
