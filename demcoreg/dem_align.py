@@ -26,6 +26,8 @@
 
 import sys
 import os
+import argparse
+
 from osgeo import gdal
 import numpy as np
 import scipy.ndimage
@@ -38,19 +40,26 @@ from pygeotools.lib import warplib
 
 from demcoreg import coreglib
 
+def getparser():
+    parser = argparse.ArgumentParser(description="Perform DEM co-registration using old algorithms")
+    parser.add_argument('ref_fn', type=str, help='Reference DEM filename')
+    parser.add_argument('src_fn', type=str, help='Source DEM filename to be moved')
+    parser.add_argument('-mode', type=str, default='ncc', choices=['ncc', 'sad', 'nuth', 'none'], help='Type of co-registration to use')
+    parser.add_argument('-mask_fn', type=str, default=None, help='Mask filename')
+    parser.add_argument('-outdir', default=None, help='Output directory')
+    return parser
+
 def main(argv=None):
+    parser = getparser()
+    args = parser.parse_args()
 
-    if argv is None:
-        argv = sys.argv
-
-    if len(argv) < 3 or len(argv) > 4:
-        sys.exit("Usage is %s ref_dem source_dem [staticmask.shp]" % os.path.basename(argv[0]))
+    #Should check filenames exist
 
     #Input DEMs
     #This is the reference
-    dem1_fn = sys.argv[1]
+    dem1_fn = args.ref_fn
     #This is the source to be moved
-    dem2_fn = sys.argv[2]
+    dem2_fn = args.src_fn
 
     print("\nReference: %s" % dem1_fn)
     print("Source: %s" % dem2_fn)
@@ -58,10 +67,12 @@ def main(argv=None):
     #Input mask for static areas
     #Note mask must be in same projected coordinate system as input rasters
     #For areas not covering rock, can use the intersection polygon
-    mask_fn = None
-    if len(sys.argv) == 4:
-        mask_fn = sys.argv[3]
+    mask_fn = args.mask_fn 
+    if mask_fn is not None:
         print("Mask: %s\n" % mask_fn)
+
+    mode = args.mode
+    print("Mode: %s\n" % mode)
 
     dem1_ds = gdal.Open(dem1_fn, gdal.GA_ReadOnly)
     dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
@@ -71,10 +82,6 @@ def main(argv=None):
 
     #Check to see if input datasets have the same extent (already clipped) and gt
     clip = np.any(dem1_gt_orig != dem2_gt_orig) or geolib.extent_compare(geolib.ds_extent(dem1_ds), geolib.ds_extent(dem2_ds))
-
-    #outdir = sys.argv[4]
-    #mode = sys.argv[3]
-    mode = 'ncc'
 
     dem1_clip_ds = dem1_ds
     dem2_clip_ds = dem2_ds

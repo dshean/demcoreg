@@ -31,11 +31,15 @@ def get_proj_shift(src_c, src_shift, s_srs, t_srs, inv_trans=False):
     proj_shift = np.around(proj_shift, 3)
     return proj_shift
 
-def main():
+def getparser():
     parser = argparse.ArgumentParser(description="Apply existing pc_align translation to a DEM")
     parser.add_argument('dem_fn', type=str, help='DEM filename')
     parser.add_argument('log_fn', type=str, help='pc_align log filename')
     parser.add_argument('-outdir', default=None, help='Output directory')
+    return parser
+
+def main():
+    parser = getparser()
     args = parser.parse_args()
   
     dem_fn = args.dem_fn

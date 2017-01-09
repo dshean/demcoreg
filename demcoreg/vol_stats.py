@@ -9,6 +9,7 @@
 import sys
 import os
 import datetime
+import argparse
 
 import numpy as np
 
@@ -17,26 +18,32 @@ from pygeotools.lib import malib
 from pygeotools.lib import geolib
 from pygeotools.lib import timelib
 
-def main():
+def getparser():
+    parser = argparse.ArgumentParser(description="Compute volume/mass change stats from DEM difference")
+    parser.add_argument('fn', type=str, help='Elevation difference filename (dz.tif)')
+    parser.add_argument('-rho', type=float, default=0.917, help='Density for mass change calculation (default: %(default)s)')
+    return parser
 
-    if len(sys.argv) != 2:
-        sys.exit("Usage: %s dz.tif" % os.path.basename(sys.argv[0]))
+def main():
+    parser = getparser()
+    args = parser.parse_args()
+
+    fn = args.fn
 
     #This is mean density for N Cascades snow
     #rho = 0.5
     #Density of pure ice 
-    rho = 0.917
+    rho = args.rho
 
     #Clip negative values to 0
     filt = False 
 
-    src_fn = sys.argv[1]
-    src_ds = iolib.fn_getds(src_fn)
+    src_ds = iolib.fn_getds(fn)
     res = geolib.get_res(src_ds, square=True)[0]
     bma = iolib.ds_getma(src_ds)
 
     #Attempt to extract t1 and t2 from input filename
-    ts = timelib.fn_getdatetime_list(src_fn)
+    ts = timelib.fn_getdatetime_list(fn)
     #Hardcode timestamps
     #ts = [datetime.datetime(2013,9,10), datetime.datetime(2014,5,14)]
 

@@ -17,6 +17,8 @@ import sys
 import os
 import subprocess
 import glob
+import argparse
+from collections import OrderedDict
 
 from osgeo import gdal, ogr, osr
 import numpy as np
@@ -399,9 +401,19 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     ds = gdal.Open(out_fn)
     return ds
 
+def getparser():
+    parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
+    parser.add_argument('dem_fn', type=str, help='DEM filename')
+    parser.add_argument('log_fn', type=str, help='pc_align log filename')
+    parser.add_argument('-outdir', default=None, help='Output directory')
+    parser.add_argument('--toa', action='store_true', help='Use top-of-atmosphere reflectance values (requires "dem_fn_toa.tif")')
+    parser.add_argument('--snodas', action='store_true', help='Use SNODAS snow depth products')
+    parser.add_argument('--modscag', action='store_true', help='Use MODSCAG fractional snow cover products')
+    return parser
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("Usage: %s dem.tif" % os.path.basename(sys.argv[0]))
+    parser = getparser()
+    args = parser.parse_args()
 
     #Write out all mask products for the input DEM
     writeall = True
@@ -412,7 +424,7 @@ def main():
     #This directory should contain nlcd grid, glacier outlines
     datadir = iolib.get_datadir() 
 
-    dem_fn = sys.argv[1]
+    dem_fn = args.dem_fn
     dem_ds = gdal.Open(dem_fn)
     dem_geom = geolib.ds_geom(dem_ds)
     print(dem_fn)
@@ -421,7 +433,6 @@ def main():
     dem_dt = timelib.fn_getdatetime(dem_fn)
 
     #This will hold datasets for memwarp and output processing
-    from collections import OrderedDict
     ds_dict = OrderedDict() 
     ds_dict['dem'] = dem_ds
 
@@ -445,7 +456,7 @@ def main():
     ds_dict['lulc'] = lulc_ds
 
     ds_dict['snodas'] = None
-    if False:
+    if args.snodas:
         #Get SNODAS products for DEM timestamp
         snodas_min_dt = datetime(2003,9,30)
         if dem_dt >= snodas_min_dt: 
@@ -460,7 +471,7 @@ def main():
     #Get MODSCAG products for DEM timestamp
     #These tiles cover CONUS
     #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
-    if False:
+    if args.modscag:
         modscag_min_dt = datetime(2000,2,24)
         if dem_dt >= modscag_min_dt: 
             tile_list = get_modis_tile_list(dem_geom)
@@ -478,7 +489,7 @@ def main():
     #Disabled for now
     #Use reflectance values to estimate snowcover
     ds_dict['toa'] = None
-    if False:
+    if args.toa:
         #Use top of atmosphere scaled reflectance values (0-1)
         dem_dir = os.path.split(os.path.split(dem_fn)[0])[0]
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))

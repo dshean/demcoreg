@@ -9,6 +9,7 @@
 import sys
 import os
 import re
+import argparse
 
 import numpy as np
 
@@ -16,15 +17,22 @@ from pygeotools.lib import iolib
 from pygeotools.lib import malib
 from pygeotools.lib import warplib
 
+def getparser():
+    parser = argparse.ArgumentParser(description="Compute difference between two rasters")
+    parser.add_argument('fn1', type=str, help='Raster filename 1')
+    parser.add_argument('fn2', type=str, help='Raster filename 2')
+    parser.add_argument('-outdir', default=None, help='Output directory')
+    return parser
+
 def main():
+    parser = getparser()
+    args = parser.parse_args()
+
     #This is output ndv, avoid using 0 for differences
     diffndv = -9999
 
-    if len(sys.argv) != 3:
-        sys.exit("Usage: %s dem1.tif dem2.tif" % os.path.basename(sys.argv[0]))
-
-    dem1_fn = sys.argv[1]
-    dem2_fn = sys.argv[2]
+    dem1_fn = args.fn1
+    dem2_fn = args.fn2
 
     if dem1_fn == dem2_fn:
         sys.exit('Input filenames are identical')
@@ -34,7 +42,9 @@ def main():
     print("Warping DEMs to same res/extent/proj")
     dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent='intersection', res='max')
 
-    outdir = os.path.split(dem1_fn)[0]
+    outdir = args.outdir
+    if outdir is None:
+        outdir = os.path.split(dem1_fn)[0]
     outprefix = os.path.splitext(os.path.split(dem1_fn)[1])[0]+'_'+os.path.splitext(os.path.split(dem2_fn)[1])[0]
 
     print("Loading input DEMs into masked arrays")
