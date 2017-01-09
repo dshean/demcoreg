@@ -30,7 +30,6 @@ import argparse
 
 from osgeo import gdal
 import numpy as np
-import scipy.ndimage
 
 from pygeotools.lib import iolib
 from pygeotools.lib import malib
@@ -227,6 +226,7 @@ def main(argv=None):
             print("Applying edge-detection filter to DEMs")
             #Note, this propagates Nans and greatly reduces valid data area
             sigma = 1
+            import scipy.ndimage
             dem1_LoG = malib.nanfill(dem1, scipy.ndimage.filters.gaussian_laplace, sigma) 
             dem2_LoG = malib.nanfill(dem2, scipy.ndimage.filters.gaussian_laplace, sigma) 
             m, int_offset, sp_offset, fig = coreglib.compute_offset_ncc(dem1_LoG, dem2_LoG, plot=False)
