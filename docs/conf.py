@@ -28,8 +28,8 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return MagicMock()
 
-MOCK_MODULES = ['osgeo', 'gdal', 'numpy', 'scipy', 'scipy.ndimage', 'matplotlib', 'pygeotools', 'pygeotools.lib', \
-                'h5py', 'ogr', 'osr']
+MOCK_MODULES = ['osgeo', 'gdal', 'ogr', 'osr', 'numpy', 'scipy', 'scipy.ndimage', 'matplotlib', 'matplotlib.pyplot', \
+                'pygeotools', 'pygeotools.lib', 'h5py']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # -- General configuration ------------------------------------------------
