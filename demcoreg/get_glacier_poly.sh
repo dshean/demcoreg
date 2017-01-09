@@ -10,7 +10,9 @@ if [ -z "$DATADIR" ] ; then
     export DATADIR=$HOME/data
 fi
 
+echo "Downlaiding RGI glacier inventory shp"
 cd $DATADIR
+pwd
 
 rgi_zip_fn='rgi50.zip'
 rgi_fn='rgi50'
@@ -35,7 +37,7 @@ if [ ! -d $rgi_fn/regions ] ; then
 fi
 
 cd $rgi_fn/regions
-mv 00_rgi40* ../
+mv 00_rgi*Regions* ../
 
 #Merge regions for global shp
 #if [ ! -e rgi50_merge.shp ] ; then
