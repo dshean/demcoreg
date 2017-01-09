@@ -34,6 +34,9 @@ def main():
     #rho = 0.5
     #Density of pure ice 
     rho = args.rho
+    #If number is in kg/m^3 rather than g/cc
+    if rho > 10.:
+        rho /= 1000.
 
     #Clip negative values to 0
     filt = False 
