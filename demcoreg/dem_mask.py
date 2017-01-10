@@ -150,7 +150,7 @@ def mask_bareground(ds, minperc=80):
     print("Loading bareground")
     b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
-    print("Masking pixels with <%0.1f%% bare ground" % minperc)
+    print("Masking pixels with <%0.1f%% bare ground\n" % minperc)
     if minperc < 0.0 or minperc > 100.0:
         sys.exit("Invalid bare ground percentage")
     mask = (l>minperc)
@@ -447,7 +447,7 @@ def main():
     ds_dict['toa'] = None
     if args.toa:
         #Use top of atmosphere scaled reflectance values (0-1)
-        dem_dir = os.path.split(os.path.split(dem_fn)[0])[0]
+        dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         if not toa_fn:
             cmd = ['toa.sh', dem_dir]
@@ -465,6 +465,8 @@ def main():
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values
     ds_list = warplib.memwarp_multi(ds_dict.values(), res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
+
+    print(' ')
 
     #Update 
     for n, key in enumerate(ds_dict.keys()):
@@ -484,17 +486,17 @@ def main():
             rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
         elif lulc_source == 'bareground':
             bareground_thresh = args.bareground_thresh
-            print("Applying bareground percent filter (masking values >= %0.2f%%)" % bareground_thresh)
+            print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
             rockmask = mask_bareground(ds_dict['lulc'], minperc=bareground_thresh)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
-            print("Writing out %s" % out_fn)
+            print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(rockmask, newmask)
 
     if 'snodas' in ds_dict.keys():
         #SNODAS snow depth filter
-        snodas_max_depth = args.snodas_thresh 
+        snodas_thresh = args.snodas_thresh 
         print("Applying SNODAS snow depth filter (masking values >= %0.2f m)" % snodas_thresh)
         #snow depth values are mm, convert to meters
         snodas_depth = iolib.ds_getma(ds_dict['snodas'])/1000.
@@ -502,19 +504,19 @@ def main():
             out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
             print("Writing out %s" % out_fn)
             iolib.writeGTiff(snodas_depth, out_fn, src_ds=ds_dict['dem'])
-        snodas_mask = np.ma.masked_greater(snodas_depth, snodas_max_depth)
+        snodas_mask = np.ma.masked_greater(snodas_depth, snodas_thresh)
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_snowdas_mask.tif'
-            print("Writing out %s" % out_fn)
+            print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(snodas_mask, newmask)
 
     if 'modscag' in ds_dict.keys():
         #MODSCAG percent snowcover
         modscag_thresh = args.modscag_thresh
-        print("Applying MODSCAG fractional snow cover percent filter (masking values >= %0.2f%%)" % modscag_thresh)
+        print("Applying MODSCAG fractional snow cover percent filter (masking values >= %0.1f%%)" % modscag_thresh)
         modscag_perc = iolib.ds_getma(ds_dict['modscag'])
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_perc.tif'
@@ -525,7 +527,7 @@ def main():
         modscag_mask = ~(modscag_mask)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_mask.tif'
-            print("Writing out %s" % out_fn)
+            print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(modscag_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(modscag_mask, newmask)
 
@@ -539,7 +541,7 @@ def main():
         toa_mask = ~(np.ma.getmaskarray(toa_mask))
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_toamask.tif'
-            print("Writing out %s" % out_fn)
+            print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(toa_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(toa_mask, newmask)
 
@@ -550,6 +552,7 @@ def main():
         newdem = np.ma.masked_greater(dem, max_elev)
         newmask = np.ma.getmaskarray(newdem)
 
+    print("Generating final mask to use for reference surfaces, and applying to input DEM")
     #Now invert to use to create final masked array
     newmask = ~newmask
 
@@ -560,7 +563,7 @@ def main():
 
     #Write out final mask
     out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
-    print("Writing out %s" % out_fn)
+    print("Writing out %s\n" % out_fn)
     iolib.writeGTiff(newdem, out_fn, src_ds=ds_dict['dem'])
 
 if __name__ == "__main__":
