@@ -8,5 +8,3 @@ demcoreg contains Python function libraries and command-line tools for DEM-coreg
 These tools can also be used to align two arbitrary rasters with sub-pixel precision.
 
 Documentation is a work in progress.
-
-.. include:: ../README.md
