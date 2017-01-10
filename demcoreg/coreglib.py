@@ -1,22 +1,19 @@
 #! /usr/bin/env python
 
-#David Shean
-#dshean@gmail.com
+"""
+Library of functions that can be used for horizontal co-registration of raster data
 
-#Library of functions that can be used for DEM co-registration
-#Implementation of Nuth and Kaab (2011) algorithm for co-registration
+These were written in 2012-2013, and should be cleaned up and tested before use
 
-#Most of these were written in 2012 and promptly abandoned when ASP pc_align utility arrived
-#Need some cleanup, but archived here for reference
-#Untested
+The ASP pc_align ICP co-registration is usually superior to these approaches
+
+"""
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from pygeotools.lib import malib
 
-#The following two functions were extracted from openPIV pyprocess
-#Find integer indices for correlation peak
 def find_first_peak(corr):
     """
     Find row and column indices of the first correlation peak.
@@ -37,6 +34,8 @@ def find_first_peak(corr):
     corr_max1 : int
         the value of the correlation peak
     
+    Original code from openPIV pyprocess
+
     """    
     ind = corr.argmax()
     s = corr.shape[1] 
@@ -46,8 +45,6 @@ def find_first_peak(corr):
     
     return i, j, corr.max()
 
-#From openPIV pyprocess
-#Determine sub-pixel peak position
 def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
     """
     Find subpixel approximation of the correlation peak.
@@ -73,8 +70,10 @@ def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
     subp_peak_position : two elements tuple
         the fractional row and column indices for the sub-pixel
         approximation of the correlation peak.
+
+    Original code from openPIV pyprocess
+
     """
-    
     # initialization
     default_peak_position = (corr.shape[0]/2,corr.shape[1]/2)
 
@@ -117,9 +116,10 @@ def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
 #Return offest for simple sum of absolute differences minimum
 #Note - this should work fine for control surfaces
 #Will fail when surface is changing and aspect is uniform
-def compute_offset_sad(dem1, dem2, plot=False):
+def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
+    """Compute horizontal offset between input rasters using sum of absolute differences (SAD) method
+    """
     #This defines the search window size
-    pad = [9,9]
     #Use half-pixel stride?
     #Note: stride is not properly implemented 
     #stride = 1
@@ -168,10 +168,11 @@ def compute_offset_sad(dem1, dem2, plot=False):
     return m, int_offset, sp_offset
 
 #This is a decent full-image normalized cross-correlation routine with sub-pixel refinement
-def compute_offset_ncc(dem1, dem2, plot=False): 
+def compute_offset_ncc(dem1, dem2, pad=(9,9), plot=False): 
+    """Compute horizontal offset between input rasters using normalized cross-correlation (NCC) method
+    """
     import scipy.signal
     #Compute max offset given dem spatial resolution
-    pad = [9, 9]
     #Should implement arbirary x and y search space
     #xsearch = (20, 41)
     #ysearch = (-10, 1)
@@ -299,6 +300,8 @@ def func(x, a, b, c):
 
 #This is the Nuth and Kaab (2011) method
 def compute_offset_nuth(dh, slope, aspect):
+    """Compute horizontal offset between input rasters using Nuth and Kaab [2011] (nuth) method
+    """
     import scipy.optimize as optimization
 
     #mean_dh = dh.mean()
