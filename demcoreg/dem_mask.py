@@ -449,6 +449,7 @@ def main():
                 ds_dict['modscag'] = modscag_ds
 
     #TODO: need to clean this up
+    #Better error handling
     #Disabled for now
     #Use reflectance values to estimate snowcover
     ds_dict['toa'] = None
@@ -458,6 +459,7 @@ def main():
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         if not toa_fn:
             cmd = ['toa.sh', dem_dir]
+            print(cmd)
             subprocess.call(cmd)
             toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         toa_fn = toa_fn[0]
