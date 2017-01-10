@@ -1,14 +1,16 @@
 #! /usr/bin/env python
+"""
+Utility to automate reference surface identification for raster co-registration
 
-#David Shean
-#dshean@gmail.com
+Note: Initial run may take a long time to download and process required data (NLCD, global bareground, glacier polygons)
 
-#Commands and notes to automate control surface identification using LULC and snowcover grids
+Can control location of these data files with DATADIR environmental variable
 
-#This was written for co-registration of CONUS DEMs
-#Assumes that LULC, SNODAS, MODSCAG products are available for input DEM location
+export DATADIR=dir
 
-#Dependencies: wget, requests, bs4
+Dependencies: gdal, wget, requests, bs4
+
+"""
 
 #To do: 
 #Add minium valid pixel count check - if not met, relax some criteria
@@ -39,7 +41,10 @@ def get_nlcd(datadir=None):
     """
     if datadir is None:
         datadir = iolib.get_datadir()
-    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
+    #This is original filename, which requires ~17 GB
+    #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
+    #get_nlcd.sh now creates a compressed GTiff, which is 1.1 GB
+    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
     if not os.path.exists(nlcd_fn):
         cmd = ['get_nlcd.sh',]
         subprocess.call(cmd)
@@ -114,7 +119,6 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
-#This is painful, but should only have to do it once
 def mask_nlcd(ds, valid='rock'):
     """Generate raster mask for exposed rock in NLCD data
     """
@@ -129,10 +133,13 @@ def mask_nlcd(ds, valid='rock'):
         #52 - shrub, <5 m tall, >20%
         #42 - evergreeen forest
     #Should use data dictionary here for general masking
+    #Using 'rock+ice+water' preserves the most pixels, although could be problematic over areas with lakes
     if valid == 'rock':
         mask = (l==31)
     elif valid == 'rock+ice':
         mask = np.logical_or((l==31),(l==12))
+    elif valid == 'rock+ice+water':
+        mask = np.logical_or(np.logical_or((l==31),(l==12)),(l==11))
     else:
         print("Invalid mask type")
         mask = None
@@ -482,8 +489,10 @@ def main():
     if 'lulc' in ds_dict.keys():
         if lulc_source == 'nlcd':
             #rockmask is already 1 for valid rock, 0 for everything else (ndv)
-            print("Applying NLCD LULC filter for rock")
-            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
+            #print("Applying NLCD LULC filter for rock")
+            #rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
+            print("Applying NLCD LULC filter for rock+ice+water")
+            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water')
         elif lulc_source == 'bareground':
             bareground_thresh = args.bareground_thresh
             print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
