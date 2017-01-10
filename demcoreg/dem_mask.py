@@ -517,7 +517,7 @@ def main():
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
         if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_snowdas_mask.tif'
+            out_fn = os.path.splitext(dem_fn)[0]+'_snodas_mask.tif'
             print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(snodas_mask, newmask)
