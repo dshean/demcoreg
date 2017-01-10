@@ -5,6 +5,7 @@
 
 #This script will download national land cover data
 #Needed for various masking applicaitons
+#Should be better than global bareground data for identifying exposed rock surfaces
 
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
 
@@ -28,12 +29,20 @@ fi
 
 if [ ! -e $nlcd_fn ] ; then
     echo "Unzipping $nlcd_zip_fn"
-    unzip $nlcd_zip_fn
+    #unzip $nlcd_zip_fn
+    #NOTE: Default OS X unzip fails to extract: skips *.ige due to error (need PK compat. v4.5 (can do v2.1))
+    #Can use 7za: brew install p7zip
+    #7za x $nlcd_zip_fn
+    #But tar -z should be a safe cross-platform option
+    tar -xzvf $nlcd_zip_fn
     #Can save a lot of disk space compressing the original ArcGrid img and deleting overviews
     #Input is ~17 GB, output is 1.1 GB
-    #Note: there are now issues with missing .ige
-    #TODO: fix this
+    echo "Creating compressed GTiff copy"
     echo gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
-    #rm -r $(dirname $nlcd_fn)/*
-    #mv $DATADIR/temp.tif $nlcd_fn
+    gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
+    echo "Removing $(dirname $nlcd_fn) contents"
+    rm -rv $(dirname $nlcd_fn)/*
+    mv -v $DATADIR/temp.tif $nlcd_fn
+else 
+    echo "Found existing ${nlcd_fn}!"
 fi
