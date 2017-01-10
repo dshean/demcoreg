@@ -30,9 +30,13 @@ from pygeotools.lib import warplib
 from pygeotools.lib import geolib
 from pygeotools.lib import timelib
 
-#2011 Land Use Land Cover (nlcd) grids, 30 m
-#http://www.mrlc.gov/nlcd11_leg.php
 def get_nlcd(datadir=None):
+    """Calls external shell script `get_nlcd.sh` to fetch:
+
+    2011 Land Use Land Cover (nlcd) grids, 30 m
+    
+    http://www.mrlc.gov/nlcd11_leg.php
+    """
     if datadir is None:
         datadir = iolib.get_datadir()
     nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
@@ -41,11 +45,17 @@ def get_nlcd(datadir=None):
         subprocess.call(cmd)
     return nlcd_fn
 
-#~2010 global bare ground, 30 m
-#When unzipped, this is 64 GB!
-#No compression, global tiles (including empty data over ocean)
-#http://landcover.usgs.gov/glc/BareGroundDescriptionAndDownloads.php
 def get_bareground(datadir=None):
+    """Calls external shell script `get_bareground.sh` to fetch:
+
+    ~2010 global bare ground, 30 m
+
+    Note: unzipped file size is 64 GB! Original products are uncompressed, and tiles are available globally (including empty data over ocean)
+
+    The shell script will compress all downloaded tiles using lossless LZW compression.
+
+    http://landcover.usgs.gov/glc/BareGroundDescriptionAndDownloads.php
+    """
     if datadir is None:
         datadir = iolib.get_datadir()
     bg_fn = os.path.join(datadir, 'bare2010/bare2010.vrt')
@@ -55,8 +65,17 @@ def get_bareground(datadir=None):
     return bg_fn 
 
 #Download latest global RGI glacier db
-#rgi50.zip is 410 MB
 def get_glacier_poly(datadir=None):
+    """Calls external shell script `get_glacier_poly.sh` to fetch:
+
+    Randolph Glacier Inventory (RGI) glacier outline shapefiles 
+
+    Full RGI database: rgi50.zip is 410 MB
+
+    The shell script will unzip and merge regional shp into single global shp
+    
+    http://www.glims.org/RGI/
+    """
     if datadir is None:
         datadir = iolib.get_datadir()
     rgi_fn = os.path.join(datadir, 'rgi50/regions/rgi50_merge.shp')
@@ -67,6 +86,8 @@ def get_glacier_poly(datadir=None):
 
 #Update glacier polygons
 def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
+    """Generate glacier polygon raster mask for input Dataset res/extent
+    """
     if datadir is None:
         datadir = iolib.get_datadir()
     print("Masking glaciers")
@@ -88,38 +109,6 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
     else:
         print("Found glacier shp: %s" % glac_shp_fn)
 
-    """
-    #Get ds envelope 
-    dem_geom = geolib.ds_geom(ds)
-    dem_geom_copy = geolib.geom_dup(dem_geom)
-
-    glac_shp_ds = ogr.Open(glac_shp_fn)
-    glac_shp_lyr = glac_shp_ds.GetLayer()
-    #This is [minlon, maxlon, minlat, maxlat)
-    glac_shp_geom = geolib.bbox2geom(glac_shp_lyr.GetExtent())
-    #Transform dem_geom
-    geolib.geom_transform(dem_geom_copy, t_srs=glac_shp_lyr.GetSpatialRef())
-    icemask = None
-    if glac_shp_geom.Intersects(dem_geom_copy):
-        #This is a hack that creates a new shp with ds srs using ogr2ogr, limiting to spat 
-        temp_shp_fn = os.path.join(glac_shp_dir, 'temp.shp')
-        te = dem_geom_copy.GetEnvelope()
-        te = (te[0],te[2],te[1],te[3])
-        cmd = ['ogr2ogr', '-t_srs', "%s" % ds.GetProjection(), '-spat']
-        cmd.extend([str(i) for i in te])
-        cmd.extend([temp_shp_fn, glac_shp_fn])  
-        print(cmd)
-        subprocess.call(cmd)
-        #Since we're using rgi05_merge.shp, just need to do this once
-        #This burns 1 for valid pixels, 0 elsewhere
-        icemask = geolib.shp2array(temp_shp_fn, r_ds=ds)
-        #If looping through multiple shp (ie different RGI regions)
-        #if icemask is None:
-            #icemask = geolib.shp2array(temp_shp_fn, r_ds=ds)
-        #else:
-        #    icemask = np.logical_or(icemask, geolib.shp2array(temp_shp_fn, r_ds=ds).astype(bool))
-    """
-
     #All of the proj, extent, handling should now occur in shp2array
     icemask = geolib.shp2array(glac_shp_fn, ds)
     return icemask
@@ -127,6 +116,8 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
 #Create rockmask from nlcd and remove glaciers
 #This is painful, but should only have to do it once
 def mask_nlcd(ds, valid='rock'):
+    """Generate raster mask for exposed rock in NLCD data
+    """
     print("Loading nlcd")
     b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
@@ -154,6 +145,8 @@ def mask_nlcd(ds, valid='rock'):
     return mask
 
 def mask_bareground(ds, minperc=80):
+    """Generate raster mask for exposed bare ground from global bareground data
+    """
     print("Loading bareground")
     b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
@@ -169,50 +162,18 @@ def mask_bareground(ds, minperc=80):
 
     return mask
 
-#Function to get files using urllib
-#This works with ftp
-def getfile(url, outdir=None):
-    fn = os.path.split(url)[-1]
-    if outdir is not None:
-        fn = os.path.join(outdir, fn)
-    if not os.path.exists(fn):
-        #Find appropriate urlretrieve for Python 2 and 3
-        try:
-            from urllib.request import urlretrieve
-        except ImportError:
-            from urllib import urlretrieve 
-        print("Retrieving: %s" % url)
-        #Add progress bar
-        urlretrieve(url, fn)
-    return fn
-
-#Function to get files using requests
-#Works with https authentication
-def getfile2(url, auth=None, outdir=None):
-    import requests
-    print("Retrieving: %s" % url)
-    fn = os.path.split(url)[-1]
-    if outdir is not None:
-        fn = os.path.join(outdir, fn)
-    if auth is not None:
-        r = requests.get(url, stream=True, auth=auth)
-    else:
-        r = requests.get(url, stream=True)
-    chunk_size = 1000000
-    with open(fn, 'wb') as fd:
-        for chunk in r.iter_content(chunk_size):
-            fd.write(chunk)
-
-#SNODAS snow depth products
-#http://nsidc.org/data/docs/noaa/g02158_snodas_snow_cover_model/index.html
-#1036 is snow depth
-#us_ssmv11036tS__T0001TTNATS2015042205HP001.Hdr
-
-#Get SNODAS for a given datetime
 def get_snodas(dem_dt, outdir=None):
+    """Function to fetch and process SNODAS snow depth products for input datetime
+
+    http://nsidc.org/data/docs/noaa/g02158_snodas_snow_cover_model/index.html
+
+    1036 is snow depth
+
+    filename format: us_ssmv11036tS__T0001TTNATS2015042205HP001.Hdr
+
+    """
     import tarfile
     import gzip
-
     snodas_ds = None
     snodas_url_str = None
     #Note: unmasked products (beyond CONUS) are only available from 2010-present
@@ -227,7 +188,7 @@ def get_snodas(dem_dt, outdir=None):
 
     if snodas_url_str is not None:
         snodas_url = dem_dt.strftime(snodas_url_str)
-        snodas_tar_fn = getfile(snodas_url, outdir=outdir)
+        snodas_tar_fn = iolib.getfile(snodas_url, outdir=outdir)
         print("Unpacking")
         tar = tarfile.open(snodas_tar_fn)
         #gunzip to extract both dat and Hdr files, tar.gz
@@ -264,34 +225,14 @@ def get_snodas(dem_dt, outdir=None):
         snodas_ds = gdal.Open(snodas_fn)
     return snodas_ds
 
-#MODSCAG snow cover percentage
-#https://snow-data.jpl.nasa.gov/modscag-historic/2015/001/MOD09GA.A2015001.h07v03.005.2015006001833.snow_fraction.tif
-#h09v04 should cover WA
-
-#Could also use global MODIS 500 m snowcover grids, 8 day
-#http://nsidc.org/data/docs/daac/modis_v5/mod10a2_modis_terra_snow_8-day_global_500m_grid.gd.html
-#These are HDF4, sinusoidal
-#Should be able to load up with warplib without issue
-
-#Get necessary credentials to access MODSCAG products - hopefully this will soon be archived with NSIDC 
-def get_auth():
-    import getpass
-    from requests.auth import HTTPDigestAuth
-    #This binds raw_input to input for Python 2
-    try:
-       input = raw_input
-    except NameError:
-       pass
-    uname = input("MODSCAG Username:")
-    pw = getpass.getpass("MODSCAG Password:")
-    auth = HTTPDigestAuth(uname, pw)
-    #wget -A'h8v4*snow_fraction.tif' --user=uname --password=pw
-    return auth
-
 #Need 
 def get_modis_tile_list(geom):
-    #https://modis-land.gsfc.nasa.gov/MODLAND_grid.html
-    #modis_grid contains dictionary of tile name and WKT polygon ring from bbox
+    """Helper function to identify MODIS tiles that intersect input geometry
+
+    modis_gird.py contains dictionary of tile boundaries (tile name and WKT polygon ring from bbox)
+
+    See: https://modis-land.gsfc.nasa.gov/MODLAND_grid.html
+    """
     from demcoreg import modis_grid
     modis_dict = modis_grid.modis_dict
     for key in modis_dict:
@@ -305,13 +246,24 @@ def get_modis_tile_list(geom):
             tile_list.append(key)
     return tile_list
 
-#Get MODSCAG products for a date range around a give DEM date 
-#Default tiles cover CONUS
 def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05'), pad_days=7):
+    """Function to fetch and process MODSCAG fractional snow cover products for input datetime
+
+    Products are tiled in MODIS sinusoidal projection
+
+    example url: https://snow-data.jpl.nasa.gov/modscag-historic/2015/001/MOD09GA.A2015001.h07v03.005.2015006001833.snow_fraction.tif
+
+    """
+
+    #Could also use global MODIS 500 m snowcover grids, 8 day
+    #http://nsidc.org/data/docs/daac/modis_v5/mod10a2_modis_terra_snow_8-day_global_500m_grid.gd.html
+    #These are HDF4, sinusoidal
+    #Should be able to load up with warplib without issue
+
     import re
     import requests
     from bs4 import BeautifulSoup
-    auth = get_auth()
+    auth = iolib.get_auth()
     pad_days = timedelta(days=pad_days)
     dt_list = timelib.dt_range(dem_dt-pad_days, dem_dt+pad_days+timedelta(1), timedelta(1))
     out_vrt_fn_list = []
@@ -360,7 +312,7 @@ def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h
                     print(modscag_url)
                     modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
                     if not os.path.exists(modscag_fn):
-                        getfile2(modscag_url, auth=auth, outdir=outdir)
+                        iolib.getfile2(modscag_url, auth=auth, outdir=outdir)
                     modscag_fn_list.append(modscag_fn)
         #Mosaic tiles - currently a hack
         if modscag_fn_list:
@@ -371,8 +323,9 @@ def get_modscag(dem_dt, outdir=None, tile_list=('h08v04', 'h09v04', 'h10v04', 'h
             out_vrt_fn_list.append(out_vrt_fn)
     return out_vrt_fn_list
 
-#Generate MODSCAG composite products for date range
 def proc_modscag(fn_list, extent=None, t_srs=None):
+    """Process the MODSCAG products for full date range, create composites and reproject
+    """
     #Use cubic spline here for improve upsampling 
     ds_list = warplib.memwarp_multi_fn(fn_list, res='min', extent=extent, t_srs=t_srs, r='cubicspline')
     stack_fn = os.path.splitext(fn_list[0])[0] + '_' + os.path.splitext(os.path.split(fn_list[-1])[1])[0] + '_stack_%i' % len(fn_list) 
