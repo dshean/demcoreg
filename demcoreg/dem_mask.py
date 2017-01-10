@@ -357,11 +357,14 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
 def getparser():
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
-    parser.add_argument('log_fn', type=str, help='pc_align log filename')
-    parser.add_argument('-outdir', default=None, help='Output directory')
-    parser.add_argument('--toa', action='store_true', help='Use top-of-atmosphere reflectance values (requires "dem_fn_toa.tif")')
+    #parser.add_argument('-outdir', default=None, help='Output directory')
+    parser.add_argument('--toa', action='store_true', help='Use top-of-atmosphere reflectance values (requires pregenerated "dem_fn_toa.tif")')
+    parser.add_argument('--toa_thresh', type=float, default=0.4, help='Top-of-atmosphere reflectance threshold (default: %(default)s, valid range 0.0-1.0), mask values greater than this value')
     parser.add_argument('--snodas', action='store_true', help='Use SNODAS snow depth products')
+    parser.add_argument('--snodas_thresh', type=float, default=0.2, help='SNODAS snow depth threshold (default: %(default)s m), mask values greater than this value')
     parser.add_argument('--modscag', action='store_true', help='Use MODSCAG fractional snow cover products')
+    parser.add_argument('--modscag_thresh', type=float, default=50, help='MODSCAG fractional snow cover percent threshold (default: %(default)s%%, valid range 0-100), mask greater than this value')
+    parser.add_argument('--bareground_thresh', type=float, default=80, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
     return parser
 
 def main():
@@ -477,9 +480,12 @@ def main():
     if 'lulc' in ds_dict.keys():
         if lulc_source == 'nlcd':
             #rockmask is already 1 for valid rock, 0 for everything else (ndv)
+            print("Applying NLCD LULC filter for rock")
             rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
         elif lulc_source == 'bareground':
-            rockmask = mask_bareground(ds_dict['lulc'], minperc=80)
+            bareground_thresh = args.bareground_thresh
+            print("Applying bareground percent filter (masking values >= %0.2f%%)" % bareground_thresh)
+            rockmask = mask_bareground(ds_dict['lulc'], minperc=bareground_thresh)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
             print("Writing out %s" % out_fn)
@@ -488,7 +494,8 @@ def main():
 
     if 'snodas' in ds_dict.keys():
         #SNODAS snow depth filter
-        snodas_max_depth = 0.2
+        snodas_max_depth = args.snodas_thresh 
+        print("Applying SNODAS snow depth filter (masking values >= %0.2f m)" % snodas_thresh)
         #snow depth values are mm, convert to meters
         snodas_depth = iolib.ds_getma(ds_dict['snodas'])/1000.
         if writeall:
@@ -506,7 +513,8 @@ def main():
 
     if 'modscag' in ds_dict.keys():
         #MODSCAG percent snowcover
-        modscag_thresh = 50
+        modscag_thresh = args.modscag_thresh
+        print("Applying MODSCAG fractional snow cover percent filter (masking values >= %0.2f%%)" % modscag_thresh)
         modscag_perc = iolib.ds_getma(ds_dict['modscag'])
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_modscag_perc.tif'
@@ -523,7 +531,8 @@ def main():
 
     if 'toa' in ds_dict.keys():
         #TOA reflectance filter
-        toa_thresh = 0.4
+        toa_thresh = args.toa_thresh
+        print("Applying TOA filter (masking values >= %0.2f)" % toa_thresh)
         toa = iolib.ds_getma(ds_dict['toa'])
         toa_mask = np.ma.masked_greater(toa, toa_thresh)
         #This should be 1 for valid surfaces, 0 for snowcovered surfaces
