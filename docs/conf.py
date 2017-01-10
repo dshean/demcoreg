@@ -22,7 +22,6 @@ import sys
 
 from recommonmark.parser import CommonMarkParser
 source_parsers = {'.md': CommonMarkParser,}
-source_suffix = ['.rst', '.md']
 
 #from unittest.mock import MagicMock
 from mock import Mock as MagicMock
