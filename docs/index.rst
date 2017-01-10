@@ -1,11 +1,11 @@
 demcoreg Documentation
 ====================================
 
+
 .. toctree::
    :maxdepth: 4
 
    intro
-   intro/readme
    tools
    coreglib
 
