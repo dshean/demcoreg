@@ -5,6 +5,7 @@ demcoreg Documentation
    :maxdepth: 4
 
    intro
+   intro/readme
    tools
    coreglib
 
