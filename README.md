@@ -55,3 +55,9 @@ The -e flag ("editable mode", setuptools "develop mode") will allow you to modif
 ## License
 
 This project is licensed under the terms of the MIT License.
+
+### Citation
+
+If you use any of this software for research applications that result in publications, please cite:
+
+Shean, D. E., O. Alexandrov, Z. Moratto, B. E. Smith, I. R. Joughin, C. C. Porter, Morin, P. J., An automated, open-source pipeline for mass production of digital elevation models (DEMs) from very high-resolution commercial stereo satellite imagery, ISPRS J. Photogramm. Remote Sens, 116, 101-117, doi: [10.1016/j.isprsjprs.2016.03.012](https://doi.org/10.1016/j.isprsjprs.2016.03.012), 2016.
