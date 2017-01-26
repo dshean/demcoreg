@@ -65,6 +65,7 @@ def main():
     #Print out stats
     print('\n')
     stats = malib.print_stats(bma)
+    print('\n')
 
     count = stats[0]
     area = res**2*count
@@ -93,6 +94,7 @@ def main():
         print("%0.3f GT" % s_gt)
         print("%0.6f mm SLR" % s_mm)
         print("%0.3f m.w.e." % s_mwe)
+    print('\n')
 
 if __name__ == "__main__":
     main()
