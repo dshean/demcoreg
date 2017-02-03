@@ -90,7 +90,7 @@ def get_glacier_poly(datadir=None):
     return rgi_fn 
 
 #Update glacier polygons
-def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
+def get_icemask(ds, datadir=None, glac_shp_fn=None):
     """Generate glacier polygon raster mask for input Dataset res/extent
     """
     if datadir is None:
@@ -102,12 +102,12 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
     #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
     #Manual selection over study area in QGIS
     #Use updated 24k glacier outlines
-    #glac_shp_fn = os.path.join(datadir, '24k_selection_32610.shp')
-
-    #glac_shp_fn_list = glob.glob(os.path.join(glac_shp_dir,'*_rgi50_*.shp'))
     if glac_shp_fn is None:
-        glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
-        glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
+        #Need to check if we're over CONUS
+        glac_shp_fn = os.path.join(datadir, 'conus_glacierpoly_24k/conus_glacierpoly_24k_32610.shp')
+        if not os.path.exists(glac_shp_fn):
+            glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
+            glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
 
     if not os.path.exists(glac_shp_fn):
         print("Unable to locate glacier shp: %s" % glac_shp_fn)
@@ -119,7 +119,7 @@ def mask_glaciers(ds, datadir=None, glac_shp_fn=None):
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
-def mask_nlcd(ds, valid='rock'):
+def mask_nlcd(ds, valid='rock', mask_glaciers=True):
     """Generate raster mask for exposed rock in NLCD data
     """
     print("Loading nlcd")
@@ -145,13 +145,14 @@ def mask_nlcd(ds, valid='rock'):
         mask = None
     l = None
 
-    icemask = mask_glaciers(ds)
-    if icemask is not None:
-        mask *= icemask
+    if mask_glaciers:
+        icemask = get_icemask(ds)
+        if icemask is not None:
+            mask *= icemask
 
     return mask
 
-def mask_bareground(ds, minperc=80):
+def mask_bareground(ds, minperc=80, mask_glaciers=True):
     """Generate raster mask for exposed bare ground from global bareground data
     """
     print("Loading bareground")
@@ -163,9 +164,10 @@ def mask_bareground(ds, minperc=80):
     mask = (l>minperc)
     l = None
 
-    icemask = mask_glaciers(ds)
-    if icemask is not None:
-        mask *= icemask
+    if mask_glaciers:
+        icemask = get_icemask(ds)
+        if icemask is not None:
+            mask *= icemask
 
     return mask
 
@@ -372,6 +374,7 @@ def getparser():
     parser.add_argument('--modscag', action='store_true', help='Use MODSCAG fractional snow cover products')
     parser.add_argument('--modscag_thresh', type=float, default=50, help='MODSCAG fractional snow cover percent threshold (default: %(default)s%%, valid range 0-100), mask greater than this value')
     parser.add_argument('--bareground_thresh', type=float, default=80, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
+    parser.add_argument('--no_icemask', action='store_true', help="Don't mask glacier polygons")
     return parser
 
 def main():
@@ -471,20 +474,34 @@ def main():
         if v is None:
             del ds_dict[k]
 
+    #Note: want to process LULC with nearest to avoid interpolating values
+    #Total hack
+    replace_nlcd = False
+    if 'lulc' in ds_dict.keys() and lulc_source == 'nlcd':
+        nlcd_ds = warplib.memwarp_multi([ds_dict['lulc'],], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='near')[0]
+        del ds_dict['lulc']
+        replace_nlcd = True
+
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values
-    ds_list = warplib.memwarp_multi(ds_dict.values(), res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
+    if len(ds_dict) > 0:
+        ds_list = warplib.memwarp_multi(ds_dict.values(), res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')
+        #Update 
+        for n, key in enumerate(ds_dict.keys()):
+            ds_dict[key] = ds_list[n] 
+           
+    if replace_nlcd:
+        ds_dict['lulc'] = nlcd_ds
 
     print(' ')
-
-    #Update 
-    for n, key in enumerate(ds_dict.keys()):
-        ds_dict[key] = ds_list[n] 
-
     #Need better handling of ds order based on input ds here
 
     dem = iolib.ds_getma(ds_dict['dem'])
     newmask = ~(np.ma.getmaskarray(dem))
+
+    mask_glaciers = True
+    if args.no_icemask:
+        mask_glaciers = False
 
     #Generate a rockmask
     #Note: these now have RGI 5.0 glacier polygons removed
@@ -494,11 +511,11 @@ def main():
             #print("Applying NLCD LULC filter for rock")
             #rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
             print("Applying NLCD LULC filter for rock+ice+water")
-            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water')
+            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water', mask_glaciers=mask_glaciers)
         elif lulc_source == 'bareground':
             bareground_thresh = args.bareground_thresh
             print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
-            rockmask = mask_bareground(ds_dict['lulc'], minperc=bareground_thresh)
+            rockmask = mask_bareground(ds_dict['lulc'], minperc=bareground_thresh, mask_glaciers=mask_glaciers)
         if writeall:
             out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
             print("Writing out %s\n" % out_fn)
