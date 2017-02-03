@@ -21,7 +21,9 @@ fi
 #1/3-arcsec NED (10 m) for CONUS
 #ref=/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt
 #1-arcsec SRTM (30 m) for HMA
-ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
+#ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
+#1-m lidar vrt
+ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
 
 if [ ! -e $ref ] ; then
     echo "Unable to find ref DEM: $ref"
@@ -42,25 +44,44 @@ if [ ! -e $dem_mask ] ; then
     exit
 fi
 
-#Clip the reference DEM to the DEM_32m extent
-warptool.py -te $dem -tr $ref -t_srs $dem -outdir $demdir $ref
-
 refdem=$demdir/$(basename $ref)
 refdem=${refdem%.*}_warp.tif
+if [ ! -e $refdem ] ; then
+    #Clip the reference DEM to the DEM_32m extent
+    echo "Clipping high-res reference DEM to appropriate extent"
+    warptool.py -te $dem -tr $ref -t_srs $dem -outdir $demdir $ref
+fi
+
+#Check if refdem has valid pixels
+
+#This avoids writing another copy of ref, but is slower
+#NOTE: assumes projection of $dem and $ref are identical.  Need to implement better get_extent with -t_srs option
+#dem_extent=$(~/src/demtools/get_extent.py $dem)
+#echo "Creating vrt of high-res reference DEM clipped to appropriate extent"
+#gdalbuildvrt -tr 1 1 -te $dem_extent -tap -r nearest ${refdem%.*}_warp.vrt $ref
+#refdem=${refdem%.*}_warp.vrt
+
 #Mask the ref using valid pixels in DEM_32m_ref.tif product
-apply_mask.py -extent intersection $refdem $dem_mask
 refdem_masked=${refdem%.*}_masked.tif
+if [ ! -e $refdem_masked ] ; then
+    echo "Applying low-res mask to high-res reference DEM"
+    apply_mask.py -extent intersection $refdem $dem_mask
+fi
 
-#point-to-point
-pc_align_wrapper.sh $refdem_masked $dem
+#Check if refdem_masked has valid pixels
 
-cd $demdir
-log=$(ls -t $outdir/*.log | head -1)
-if [ -e $log ] ; then 
-    if grep -q 'Translation vector' $log ; then
-        apply_dem_translation.py ${dembase}-DEM_32m.tif $log
-        apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-        ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
-        compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
+if [ -e $refdem_masked ] ; then
+    #point-to-point
+    pc_align_wrapper.sh $refdem_masked $dem
+
+    cd $demdir
+    if ls -t $outdir/*DEM.tif 1> /dev/null 2>&1 ; then 
+        log=$(ls -t $outdir/*.log | head -1)
+        if grep -q 'Translation vector' $log ; then
+            apply_dem_translation.py ${dembase}-DEM_32m.tif $log
+            apply_dem_translation.py ${dembase}-DEM_8m.tif $log
+            ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
+            #compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
+        fi
     fi
 fi

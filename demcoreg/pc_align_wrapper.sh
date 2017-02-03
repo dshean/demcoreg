@@ -55,7 +55,7 @@ n_iter=2000
 #max_disp=1000
 #max_disp=200
 #max_disp=40
-max_disp=30
+max_disp=10
 
 pc_align_opt=''
 point2dem_opt=''
