@@ -101,13 +101,9 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
     #Downloaded from http://www.glims.org/RGI/rgi50_files/02_rgi50_WesternCanadaUS.zip
     #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
     #Manual selection over study area in QGIS
-    #Use updated 24k glacier outlines
     if glac_shp_fn is None:
-        #Need to check if we're over CONUS
-        glac_shp_fn = os.path.join(datadir, 'conus_glacierpoly_24k/conus_glacierpoly_24k_32610.shp')
-        if not os.path.exists(glac_shp_fn):
-            glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
-            glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
+        glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
+        glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
 
     if not os.path.exists(glac_shp_fn):
         print("Unable to locate glacier shp: %s" % glac_shp_fn)
@@ -119,7 +115,7 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
-def mask_nlcd(ds, valid='rock', mask_glaciers=True):
+def mask_nlcd(ds, valid='rock', datadir=None, mask_glaciers=True):
     """Generate raster mask for exposed rock in NLCD data
     """
     print("Loading nlcd")
@@ -146,7 +142,14 @@ def mask_nlcd(ds, valid='rock', mask_glaciers=True):
     l = None
 
     if mask_glaciers:
-        icemask = get_icemask(ds)
+        #Need better handling here, check to make sure 
+        #Use updated 24k glacier outlines
+        if datadir is None:
+            datadir = iolib.get_datadir()
+        glac_shp_fn = os.path.join(datadir, 'conus_glacierpoly_24k/conus_glacierpoly_24k_32610.shp')
+        if not os.path.exists(glac_shp_fn):
+            glac_shp_fn = None
+        icemask = get_icemask(ds, datadir=datadir, glac_shp_fn=glac_shp_fn)
         if icemask is not None:
             mask *= icemask
 
@@ -511,7 +514,7 @@ def main():
             #print("Applying NLCD LULC filter for rock")
             #rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
             print("Applying NLCD LULC filter for rock+ice+water")
-            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water', mask_glaciers=mask_glaciers)
+            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water', datadir=datadir, mask_glaciers=mask_glaciers)
         elif lulc_source == 'bareground':
             bareground_thresh = args.bareground_thresh
             print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
