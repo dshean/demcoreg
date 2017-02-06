@@ -592,10 +592,20 @@ def main():
     #Apply mask to original DEM - use these surfaces for co-registration
     newdem = np.ma.array(dem, mask=newmask)
 
-    #Write out final mask
-    out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
-    print("Writing out %s\n" % out_fn)
-    iolib.writeGTiff(newdem, out_fn, src_ds=ds_dict['dem'])
+    min_validpx_count = 100
+    min_validpx_std = 10
+    validpx_count = newdem.count()
+    validpx_std = newdem.std()
+    print("\n%i valid pixels in output ref.tif" % validpx_count)
+    print("%0.2f m std output ref.tif\n" % validpx_std)
+    #if (validpx_count > min_validpx_count) and (validpx_std > min_validpx_std):
+    if (validpx_count > min_validpx_count):
+        #Write out final mask
+        out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
+        print("Writing out %s\n" % out_fn)
+        iolib.writeGTiff(newdem, out_fn, src_ds=ds_dict['dem'])
+    else:
+        print("Not enough valid pixels!")
 
 if __name__ == "__main__":
     main()
