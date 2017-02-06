@@ -1,13 +1,11 @@
 #! /bin/bash 
 
-#David Shean
-#dshean@gmail.com
-
 #This will co-register a single DEM
 #See dem_coreg_all.sh for batch processing
 
 #Input should be highest res version of DEM (i.e., DEM_2m.tif)
 dem=$1
+#ref=$2
 
 if [ ! -e $dem ] ; then
     echo "Unable to find source DEM: $dem"
@@ -24,6 +22,10 @@ fi
 #ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
 #1-m lidar vrt
 ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
+#2-m WV DEM mosaic, first round
+#ref=/nobackup/deshean/conus/dem2/conus_coreg1_mos_2m_tile/conus_coreg1_mos_2m.vrt
+#2-m WV DEM mosaic, second round
+ref=/nobackup/deshean/conus/dem2/conus_coreg2_mos_2m_tile/conus_coreg2_mos_2m.vrt
 
 if [ ! -e $ref ] ; then
     echo "Unable to find ref DEM: $ref"
@@ -46,10 +48,39 @@ fi
 
 refdem=$demdir/$(basename $ref)
 refdem=${refdem%.*}_warp.tif
+refdem_masked=${refdem%.*}_masked.tif
+
 if [ ! -e $refdem ] ; then
     #Clip the reference DEM to the DEM_32m extent
-    echo "Clipping high-res reference DEM to appropriate extent"
-    warptool.py -te $dem -tr $ref -t_srs $dem -outdir $demdir $ref
+    echo
+    echo "Warping reference DEM to low-res mask extent"
+    warptool.py -r near -te $dem_mask -tr $dem_mask -t_srs $dem_mask -outdir $demdir $ref
+    stats=$(~/src/demtools/stats.py $refdem)
+    echo
+    echo $stats
+    count=$(echo $stats | awk '{print $2}')
+    mincount=100
+    if [ "$count" -lt "$mincount" ] ; then
+        echo "Not enough valid pixels in clipped reference DEM: (${count} < ${mincount})" 
+        exit
+    fi
+    echo
+    echo "Applying low-res mask to high-res reference DEM"
+    apply_mask.py -extent intersection $refdem $dem_mask
+    stats=$(~/src/demtools/stats.py $refdem_masked)
+    echo
+    echo $stats
+    count=$(echo $stats | awk '{print $2}')
+    mincount=100
+    if [ "$count" -lt "$mincount" ] ; then
+        echo "Not enough valid pixels in masked reference DEM: (${count} < ${mincount})" 
+        exit
+    fi
+    #Remove low-res check products
+    rm $refdem_masked $refdem
+    echo
+    echo "Warping high-res reference DEM to appropriate extent"
+    warptool.py -r cubic -te $dem -tr $ref -t_srs $dem -outdir $demdir $ref
 fi
 
 #Check if refdem has valid pixels
@@ -64,6 +95,7 @@ fi
 #Mask the ref using valid pixels in DEM_32m_ref.tif product
 refdem_masked=${refdem%.*}_masked.tif
 if [ ! -e $refdem_masked ] ; then
+    echo
     echo "Applying low-res mask to high-res reference DEM"
     apply_mask.py -extent intersection $refdem $dem_mask
 fi
@@ -78,6 +110,7 @@ if [ -e $refdem_masked ] ; then
     if ls -t $outdir/*DEM.tif 1> /dev/null 2>&1 ; then 
         log=$(ls -t $outdir/*.log | head -1)
         if grep -q 'Translation vector' $log ; then
+            echo
             apply_dem_translation.py ${dembase}-DEM_32m.tif $log
             apply_dem_translation.py ${dembase}-DEM_8m.tif $log
             ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
