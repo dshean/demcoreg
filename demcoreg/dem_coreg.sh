@@ -13,19 +13,25 @@ if [ ! -e $dem ] ; then
 fi
 
 #Define the reference DEM
+#1-arcsec SRTM (30 m) for HMA
+ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
+
+#CONUS
 #Need to create vrt with 1 arcsec over areas where 1/3 is not avail
 #1-arcsec NED (30 m) for CONUS
 #ref=/nobackup/deshean/rpcdem/ned1/ned1_tiles_glac24k_115kmbuff.vrt
 #1/3-arcsec NED (10 m) for CONUS
 #ref=/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt
-#1-arcsec SRTM (30 m) for HMA
-#ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
 #1-m lidar vrt
-ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
+#ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
+
 #2-m WV DEM mosaic, first round
 #ref=/nobackup/deshean/conus/dem2/conus_coreg1_mos_2m_tile/conus_coreg1_mos_2m.vrt
 #2-m WV DEM mosaic, second round
-ref=/nobackup/deshean/conus/dem2/conus_coreg2_mos_2m_tile/conus_coreg2_mos_2m.vrt
+#ref=/nobackup/deshean/conus/dem2/conus_coreg2_mos_2m_tile/conus_coreg2_mos_2m.vrt
+#2-m WV DEM mosaic, second round
+#ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_tile/conus_coreg3_mos_2m.vrt
+#ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_summer_tile/conus_coreg3_mos_2m_summer.vrt
 
 if [ ! -e $ref ] ; then
     echo "Unable to find ref DEM: $ref"
@@ -93,11 +99,12 @@ fi
 #refdem=${refdem%.*}_warp.vrt
 
 #Mask the ref using valid pixels in DEM_32m_ref.tif product
-refdem_masked=${refdem%.*}_masked.tif
+refdem_masked=$demdir/${dembase}-$(basename $ref)
+refdem_masked=${refdem_masked%.*}_masked.tif
 if [ ! -e $refdem_masked ] ; then
     echo
     echo "Applying low-res mask to high-res reference DEM"
-    apply_mask.py -extent intersection $refdem $dem_mask
+    apply_mask.py -out_fn $refdem_masked -extent intersection $refdem $dem_mask
 fi
 
 #Check if refdem_masked has valid pixels
@@ -113,7 +120,7 @@ if [ -e $refdem_masked ] ; then
             echo
             apply_dem_translation.py ${dembase}-DEM_32m.tif $log
             apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-            ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
+            #ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m.tif
             #compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
         fi
     fi
