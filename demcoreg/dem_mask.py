@@ -115,7 +115,7 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
-def mask_nlcd(ds, valid='rock', datadir=None, mask_glaciers=True):
+def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True):
     """Generate raster mask for exposed rock in NLCD data
     """
     print("Loading nlcd")
@@ -136,6 +136,8 @@ def mask_nlcd(ds, valid='rock', datadir=None, mask_glaciers=True):
         mask = np.logical_or((l==31),(l==12))
     elif valid == 'rock+ice+water':
         mask = np.logical_or(np.logical_or((l==31),(l==12)),(l==11))
+    elif valid == 'not_forest':
+        mask = ~(np.logical_or(np.logical_or((l==41),(l==42)),(l==43)))
     else:
         print("Invalid mask type")
         mask = None
@@ -367,6 +369,7 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     return ds
 
 def getparser():
+    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest']
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
     #parser.add_argument('-outdir', default=None, help='Output directory')
@@ -378,6 +381,8 @@ def getparser():
     parser.add_argument('--modscag_thresh', type=float, default=50, help='MODSCAG fractional snow cover percent threshold (default: %(default)s%%, valid range 0-100), mask greater than this value')
     parser.add_argument('--bareground_thresh', type=float, default=80, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
     parser.add_argument('--no_icemask', action='store_true', help="Don't mask glacier polygons")
+    parser.add_argument('--filter', type=str, default='rock+ice+water', choices=filter_choices, help='Preserve these LULC pixels (default: %(default)s)') 
+    parser.add_argument('--dilate', type=int, default=None, help='Dilate mask with this many iterations (default: %(default)s)')
     return parser
 
 def main():
@@ -386,6 +391,10 @@ def main():
 
     #Write out all mask products for the input DEM
     writeall = True
+
+    mask_glaciers = True
+    if args.no_icemask:
+        mask_glaciers = False
 
     #Define top-level directory containing DEM
     topdir = os.getcwd()
@@ -502,19 +511,13 @@ def main():
     dem = iolib.ds_getma(ds_dict['dem'])
     newmask = ~(np.ma.getmaskarray(dem))
 
-    mask_glaciers = True
-    if args.no_icemask:
-        mask_glaciers = False
-
     #Generate a rockmask
     #Note: these now have RGI 5.0 glacier polygons removed
     if 'lulc' in ds_dict.keys():
         if lulc_source == 'nlcd':
-            #rockmask is already 1 for valid rock, 0 for everything else (ndv)
-            #print("Applying NLCD LULC filter for rock")
-            #rockmask = mask_nlcd(ds_dict['lulc'], valid='rock')
-            print("Applying NLCD LULC filter for rock+ice+water")
-            rockmask = mask_nlcd(ds_dict['lulc'], valid='rock+ice+water', datadir=datadir, mask_glaciers=mask_glaciers)
+            lulc_type = args.filter
+            print("Applying NLCD LULC filter, preserving: %s" % lulc_filter)
+            rockmask = mask_nlcd(ds_dict['lulc'], valid=lulc_filter, datadir=datadir, mask_glaciers=mask_glaciers)
         elif lulc_source == 'bareground':
             bareground_thresh = args.bareground_thresh
             print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
@@ -587,6 +590,13 @@ def main():
     #Now invert to use to create final masked array
     newmask = ~newmask
 
+    #Dilate the mask
+    if args.dilate is not None:
+        niter = args.dilate 
+        print("Dilating mask with %i iterations" % niter)
+        from scipy import ndimage
+        newmask = ~(ndimage.morphology.binary_dilation(~newmask, iterations=niter))
+    
     #Check that we have enough pixels, good distribution
 
     #Apply mask to original DEM - use these surfaces for co-registration
