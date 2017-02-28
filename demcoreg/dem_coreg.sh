@@ -14,7 +14,9 @@ fi
 
 #Define the reference DEM
 #1-arcsec SRTM (30 m) for HMA
-ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
+#ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
+#Round 1 after ICESat
+ref=/nobackupp8/deshean/hma/hma1_2016dec22/hma_2m_tile_20170220/hma_2m.vrt
 
 #CONUS
 #Need to create vrt with 1 arcsec over areas where 1/3 is not avail
