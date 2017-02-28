@@ -62,29 +62,36 @@ n_iter=2000
 #max_disp=10
 max_disp=5
 
+#ATM "resolution" should be ~10 m - finer for repeat tracks
+#atm_res=10.0
+#fmt="--csv-format '1:lat 2:lon 3:height_above_datum'"
+#This x y is ECEF
+#fmt="--csv-format '1:x 2:y 3:height_above_datum'"
+
+#ICESat-1 along-track spacing
+atm_res=140.0
+fmt="--csv-format '3:lat 4:lon 5:height_above_datum'"
+
 pc_align_opt=''
 point2dem_opt=''
 
+#Sample points before and after coreg
+#Requires ASP/Tools build
+sample_pts=false
+
 #Extract info about reference point cloud to use for alignment
 if [ ${atm##*.} = 'csv' ] ; then
-    #ATM "resolution" should be ~10 m - finer for repeat tracks
-    atm_res=10.0
-    sample_pts=true
-    fmt="--csv-format '1:lat 2:lon 3:height_above_datum'"
-    #This x y is ECEF
-    #fmt="--csv-format '1:x 2:y 3:height_above_datum'"
     pc_align_opt+=$fmt
     ref_type='point'
 elif [ ${atm##*.} = 'tif' ] ; then
     #ASP PC
     if gdalinfo $atm | grep -q POINT_OFFSET ; then
+        #This info should now be available in PC.tif header
         atm_res=0.5
-        sample_pts=false
         ref_type='asp_pc'
     #Gridded geotif
     else
         atm_res=$(gdalinfo $atm | grep 'Pixel Size' | awk -F'[(,)]' '{print $2}')
-        sample_pts=false
         ref_type='grid'
     fi
 else
@@ -97,26 +104,22 @@ fi
 if [ ${dem##*.} = 'csv' ] ; then
     dem_type='point'
     #ATM "resolution" should be ~10 m - finer for repeat tracks
-    dem_res=10.0
-    fmt="--csv-format '1:lat 2:lon 3:height_above_datum'"
-    sample_pts=false
+    dem_res=$atm_res
     use_point2dem=true
     usemask=false
-    #This x y is ECEF
-    #fmt="--csv-format '1:x 2:y 3:height_above_datum'"
     pc_align_opt+=$fmt
 elif [ ${dem##*.} = 'tif' ] ; then
     #ASP PC
     if gdalinfo $dem | grep -q POINT_OFFSET ; then
         dem_type='asp_pc'
         dem_res=0.5
-        sample_pts=false
         use_point2dem=true
         #Could theoretically use mask here
         usemask=false
     #Gridded geotif
     else
         dem_type='grid'
+        #Can used compute_dz.py here
         sample_pts=true
         use_point2dem=false
         usemask=true
