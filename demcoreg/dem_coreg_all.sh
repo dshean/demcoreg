@@ -10,6 +10,13 @@
 #qsub ~/bin/devel.pbs
 #cd topdir
 
+site=scg
+#site=conus
+#site=hma
+
+#Coreg round number
+n=1
+
 njobs=10
 #njobs=4
 #Default is for all WV/GE/QB subdir
@@ -17,12 +24,12 @@ list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif)
 list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
 list_32m_done=$(ls -Sr *00/dem*/*-DEM_32m_trans.tif)
 
-parallel_log=dem_coreg_round2_log
+#parallel_log=dem_coreg_round2_log
 
 echo "Creating done and todo lists"
-done_list=conus_coreg_round3_done.txt
+done_list=${site}_coreg_round${n}_done.txt
+todo_list=${site}_coreg_round${n}_todo.txt
 echo -n > $done_list
-todo_list=conus_coreg_round3_todo.txt
 echo -n > $todo_list
 for i in $list_32m
 do
@@ -65,8 +72,10 @@ list_32m=$(cat ${todo_list})
 #set pc_align_wrapper threads to 2 or 4
 #set pc_align-wrapper max displacement
 list_2m=$(echo $list_32m | sed 's/-DEM_32m.tif/-DEM_2m.tif/g')
-list_8m=$(ls -Sr *00/dem*/*-DEM_8m.tif)
-parallel --progress --results $parallel_log -j $njobs --delay 3 'dem_coreg.sh {}' ::: $list_2m
+#list_8m=$(ls -Sr *00/dem*/*-DEM_8m.tif)
+#parallel --progress --results $parallel_log -j $njobs --delay 3 'dem_coreg.sh {}' ::: $list_2m
+#echo $list_2m
+parallel --progress -j $njobs --delay 3 'dem_coreg.sh {}' ::: $list_2m
 #parallel --progress --results coreg_8m_log -j 24 --delay 1 'dem_coreg.sh {}' ::: $list_8m
 
 #Now create new weighted average mosaics, burn into reference DEM, and rerun the co-registration
