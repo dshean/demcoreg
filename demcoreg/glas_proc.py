@@ -74,12 +74,14 @@ def sample(ds, mX, mY, bn=1, pad=0, circ=False):
         spotsize = 70
         pad = int(np.ceil(((spotsize/gt[1])-1)/2))
 
+    mX = np.atleast_1d(mX)
+    mY = np.atleast_1d(mY)
     #Convert to pixel indices
     pX, pY = geolib.mapToPixel(mX, mY, gt)
     #Mask anything outside image dimensions
     pX = np.ma.masked_outside(pX, 0, shape[1]-1)
     pY = np.ma.masked_outside(pY, 0, shape[0]-1)
-    common_mask = np.logical_or(np.ma.getmaskarray(pX), np.ma.getmaskarray(pY))
+    common_mask = (~(np.logical_or(np.ma.getmaskarray(pX), np.ma.getmaskarray(pY)))).nonzero()[0]
 
     #Define x and y sample windows
     xwin=pad*2+1
@@ -93,8 +95,8 @@ def sample(ds, mX, mY, bn=1, pad=0, circ=False):
         circ_mask = filtlib.circular_mask(xwin)
         min_samp = int(np.ceil((min_samp_perc/100.)*circ_mask.nonzero()[0].size))
 
-    pX_int = pX[~common_mask].data
-    pY_int = pY[~common_mask].data
+    pX_int = pX[common_mask].data
+    pY_int = pY[common_mask].data
     #Round to nearest integer indices
     pX_int = np.around(pX_int).astype(int)
     pY_int = np.around(pY_int).astype(int)
@@ -130,7 +132,7 @@ def sample(ds, mX, mY, bn=1, pad=0, circ=False):
     #Create empty array with as input points
     out = np.full((pX.size, 2), b_ndv, dtype=np_dtype)
     #Populate with valid samples
-    out[~common_mask] = stats
+    out[common_mask, :] = stats
     out = np.ma.masked_equal(out, b_ndv)
     return out
 
