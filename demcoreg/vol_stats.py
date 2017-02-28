@@ -76,7 +76,9 @@ def main():
     s_km3 = s_m3/1E9 
     s_mwe = mean*rho
     s_gt = s_km3*rho
-    s_mm = s_gt/374
+    #s_mm = s_gt/374
+    #https://climatesanity.wordpress.com/conversion-factors-for-ice-and-water-mass-and-volume/
+    s_mm = s_gt/360
 
     if dt_yr is not None:
         print("%s to %s: %0.2f yr" % (ts[0], ts[1], dt_yr))
