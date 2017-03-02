@@ -21,6 +21,8 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 
 ## Examples 
 
+![Sample dem_mask](docs/dem_mask_example_sm.jpg)
+
 ## Documentation
 
 http://demcoreg.readthedocs.io
