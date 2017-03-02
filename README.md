@@ -21,7 +21,11 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 
 ## Examples 
 
+### dem_mask.py output
 ![Sample dem_mask](docs/dem_mask_example_sm.jpg)
+
+### filter_glas.py output
+![Sample filter_glas](docs/20151227_0803_10200100499B7700_10200100496E3000-DEM_32m_glas_sm.jpg)
 
 ## Documentation
 
