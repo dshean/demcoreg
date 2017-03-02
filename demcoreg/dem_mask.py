@@ -515,7 +515,7 @@ def main():
     #Note: these now have RGI 5.0 glacier polygons removed
     if 'lulc' in ds_dict.keys():
         if lulc_source == 'nlcd':
-            lulc_type = args.filter
+            lulc_filter = args.filter
             print("Applying NLCD LULC filter, preserving: %s" % lulc_filter)
             rockmask = mask_nlcd(ds_dict['lulc'], valid=lulc_filter, datadir=datadir, mask_glaciers=mask_glaciers)
         elif lulc_source == 'bareground':
