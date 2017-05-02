@@ -451,7 +451,10 @@ def main():
     #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
     if args.modscag:
         modscag_min_dt = datetime(2000,2,24)
-        if dem_dt >= modscag_min_dt: 
+        if dem_dt < modscag_min_dt: 
+            print("\nWarning: DEM timestamp (%s) is before earliest MODSCAG timestamp (%s)\nSkipping..." \
+                    % (dem_dt, modscag_min_dt))
+        else:
             tile_list = get_modis_tile_list(dem_geom)
             print(tile_list)
             pad_days=7
