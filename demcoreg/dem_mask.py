@@ -32,7 +32,7 @@ from pygeotools.lib import warplib
 from pygeotools.lib import geolib
 from pygeotools.lib import timelib
 
-def get_nlcd(datadir=None):
+def get_nlcd_fn(datadir=None):
     """Calls external shell script `get_nlcd.sh` to fetch:
 
     2011 Land Use Land Cover (nlcd) grids, 30 m
@@ -50,7 +50,7 @@ def get_nlcd(datadir=None):
         subprocess.call(cmd)
     return nlcd_fn
 
-def get_bareground(datadir=None):
+def get_bareground_fn(datadir=None):
     """Calls external shell script `get_bareground.sh` to fetch:
 
     ~2010 global bare ground, 30 m
@@ -115,7 +115,7 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
     return icemask
 
 #Create rockmask from nlcd and remove glaciers
-def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True):
+def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True, out_fn=None):
     """Generate raster mask for exposed rock in NLCD data
     """
     print("Loading nlcd")
@@ -141,8 +141,11 @@ def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True):
     else:
         print("Invalid mask type")
         mask = None
+    #Write out original data
+    if out_fn is not None:
+        print("Writing out %s\n" % out_fn)
+        iolib.writeGTiff(l, out_fn, ds)
     l = None
-
     if mask_glaciers:
         #Need better handling here, check to make sure 
         #Use updated 24k glacier outlines
@@ -154,10 +157,9 @@ def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True):
         icemask = get_icemask(ds, datadir=datadir, glac_shp_fn=glac_shp_fn)
         if icemask is not None:
             mask *= icemask
-
     return mask
 
-def mask_bareground(ds, minperc=80, mask_glaciers=True):
+def mask_bareground(ds, minperc=80, mask_glaciers=True, out_fn=None):
     """Generate raster mask for exposed bare ground from global bareground data
     """
     print("Loading bareground")
@@ -167,14 +169,75 @@ def mask_bareground(ds, minperc=80, mask_glaciers=True):
     if minperc < 0.0 or minperc > 100.0:
         sys.exit("Invalid bare ground percentage")
     mask = (l>minperc)
+    #Write out original data
+    if out_fn is not None:
+        print("Writing out %s\n" % out_fn)
+        iolib.writeGTiff(l, out_fn, ds)
     l = None
-
     if mask_glaciers:
         icemask = get_icemask(ds)
         if icemask is not None:
             mask *= icemask
-
     return mask
+
+def get_lulc_source(ds):
+    """For a given input dataset extent, select the appropriate mask source (NLCD vs. global bareground)
+    """
+    ds_geom = geolib.ds_geom(ds)
+    lulc_fn = get_nlcd_fn()
+    lulc_ds = gdal.Open(lulc_fn)
+    lulc_geom = geolib.ds_geom(lulc_ds)
+    #If the dem geom is within CONUS (nlcd extent), use it
+    geolib.geom_transform(ds_geom, t_srs=lulc_geom.GetSpatialReference())
+
+    if lulc_geom.Contains(ds_geom):
+        print("Using NLCD 30m data for rockmask")
+        lulc_source = 'nlcd'
+    else:
+        print("Using global 30m bare ground data for rockmask")
+        #Otherwise for Global, use 30 m Bare Earth percentage 
+        lulc_source = 'bareground'
+        #lulc_fn = get_bareground_fn()
+        #lulc_ds = gdal.Open(lulc_fn)
+    return lulc_source
+
+def get_lulc_ds_full(ds, lulc_source=None):
+    if lulc_source is None:
+        lulc_source = get_lulc_source(ds)
+    if lulc_source == 'nlcd':
+        lulc_ds_full = gdal.Open(get_nlcd_fn())
+    elif lulc_source == 'bareground':
+        lulc_ds_full = gdal.Open(get_bareground_fn())
+    return lulc_ds_full
+
+def get_lulc_ds_warp(ds, lulc_source=None):
+    if lulc_source is None:
+        lulc_source = get_lulc_source(ds)
+    if lulc_source == 'nlcd':
+        #Note: want to process LULC with nearest to avoid interpolating values
+        rs = 'near'
+    else: 
+        rs = 'cubicspline'
+    lulc_ds_full = get_lulc_ds_full(ds, lulc_source)
+    lulc_ds_warp = warplib.memwarp_multi([lulc_ds_full,], res=ds, extent=ds, t_srs=ds, r=rs)[0]
+    return lulc_ds_warp
+
+#Generate a rockmask
+def get_lulc_mask(ds, lulc_source=None, mask_glaciers=True, filter='rock+ice+water', bareground_thresh=80, out_fn=None):
+    if lulc_source is None:
+        lulc_source = get_lulc_source(ds)
+    if out_fn is not None:
+        #Write out clipped, warped version of LULC for reference
+        out_fn = os.path.splitext(out_fn)[0]+'_%s.tif' % lulc_source
+    lulc_ds_warp = get_lulc_ds_warp(ds)
+    #Note: these now have RGI 5.0 glacier polygons removed
+    if lulc_source == 'nlcd':
+        print("Applying NLCD LULC filter, preserving: %s" % filter)
+        rockmask = mask_nlcd(lulc_ds_warp, valid=filter, mask_glaciers=mask_glaciers, out_fn=out_fn)
+    elif lulc_source == 'bareground':
+        print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
+        rockmask = mask_bareground(lulc_ds_warp, minperc=bareground_thresh, mask_glaciers=mask_glaciers, out_fn=out_fn)
+    return rockmask
 
 def get_snodas(dem_dt, outdir=None):
     """Function to fetch and process SNODAS snow depth products for input datetime
@@ -239,8 +302,7 @@ def get_snodas(dem_dt, outdir=None):
         snodas_ds = gdal.Open(snodas_fn)
     return snodas_ds
 
-#Need 
-def get_modis_tile_list(geom):
+def get_modis_tile_list(ds):
     """Helper function to identify MODIS tiles that intersect input geometry
 
     modis_gird.py contains dictionary of tile boundaries (tile name and WKT polygon ring from bbox)
@@ -251,6 +313,7 @@ def get_modis_tile_list(geom):
     modis_dict = modis_grid.modis_dict
     for key in modis_dict:
         modis_dict[key] = ogr.CreateGeometryFromWkt(modis_dict[key])
+    geom = geolib.ds_geom(ds)
     geom_dup = geolib.geom_dup(geom)
     ct = osr.CoordinateTransformation(geom_dup.GetSpatialReference(), geolib.wgs_srs)
     geom_dup.Transform(ct)
@@ -404,7 +467,6 @@ def main():
 
     dem_fn = args.dem_fn
     dem_ds = gdal.Open(dem_fn)
-    dem_geom = geolib.ds_geom(dem_ds)
     print(dem_fn)
 
     #Extract DEM timestamp
@@ -415,23 +477,9 @@ def main():
     ds_dict['dem'] = dem_ds
 
     ds_dict['lulc'] = None
-    #Over CONUS, use 30 m NLCD
-    lulc_fn = get_nlcd(datadir)
-    lulc_ds = gdal.Open(lulc_fn)
-    lulc_geom = geolib.ds_geom(lulc_ds)
-    #If the dem geom is within CONUS (nlcd extent), use it
-    geolib.geom_transform(dem_geom, t_srs=lulc_geom.GetSpatialReference())
-
-    if lulc_geom.Contains(dem_geom):
-        print("Using NLCD 30m data for rockmask")
-        lulc_source = 'nlcd'
-    else:
-        print("Using global 30m bare ground data for rockmask")
-        #Otherwise for Global, use 30 m Bare Earth percentage 
-        lulc_source = 'bareground'
-        lulc_fn = get_bareground(datadir)
-        lulc_ds = gdal.Open(lulc_fn)
-    ds_dict['lulc'] = lulc_ds
+    #lulc_source = get_lulc_source(dem_ds)
+    #lulc_ds_full = get_lulc_ds_full(dem_ds)
+    #ds_dict['lulc'] = lulc_ds_full
 
     ds_dict['snodas'] = None
     if args.snodas:
@@ -455,7 +503,7 @@ def main():
             print("\nWarning: DEM timestamp (%s) is before earliest MODSCAG timestamp (%s)\nSkipping..." \
                     % (dem_dt, modscag_min_dt))
         else:
-            tile_list = get_modis_tile_list(dem_geom)
+            tile_list = get_modis_tile_list(dem_ds)
             print(tile_list)
             pad_days=7
             modscag_outdir = os.path.join(datadir, 'modscag')
@@ -489,14 +537,6 @@ def main():
         if v is None:
             del ds_dict[k]
 
-    #Note: want to process LULC with nearest to avoid interpolating values
-    #Total hack
-    replace_nlcd = False
-    if 'lulc' in ds_dict.keys() and lulc_source == 'nlcd':
-        nlcd_ds = warplib.memwarp_multi([ds_dict['lulc'],], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='near')[0]
-        del ds_dict['lulc']
-        replace_nlcd = True
-
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values
     if len(ds_dict) > 0:
@@ -504,9 +544,9 @@ def main():
         #Update 
         for n, key in enumerate(ds_dict.keys()):
             ds_dict[key] = ds_list[n] 
-           
-    if replace_nlcd:
-        ds_dict['lulc'] = nlcd_ds
+    
+    #lulc_ds_warp = get_lulc_ds_warp(dem_ds)
+    #ds_dict['lulc'] = lulc_ds_warp
 
     print(' ')
     #Need better handling of ds order based on input ds here
@@ -516,39 +556,38 @@ def main():
 
     #Generate a rockmask
     #Note: these now have RGI 5.0 glacier polygons removed
-    if 'lulc' in ds_dict.keys():
-        if lulc_source == 'nlcd':
-            lulc_filter = args.filter
-            print("Applying NLCD LULC filter, preserving: %s" % lulc_filter)
-            rockmask = mask_nlcd(ds_dict['lulc'], valid=lulc_filter, datadir=datadir, mask_glaciers=mask_glaciers)
-        elif lulc_source == 'bareground':
-            bareground_thresh = args.bareground_thresh
-            print("Applying bareground percent filter (masking values >= %0.1f%%)" % bareground_thresh)
-            rockmask = mask_bareground(ds_dict['lulc'], minperc=bareground_thresh, mask_glaciers=mask_glaciers)
-        if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
-            print("Writing out %s\n" % out_fn)
-            iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
-        newmask = np.logical_and(rockmask, newmask)
+    #if 'lulc' in ds_dict.keys():
+    #We are almost always going to want LULC mask
+    out_fn_base = os.path.splitext(dem_fn)[0]
+    rockmask = get_lulc_mask(dem_ds, mask_glaciers=mask_glaciers, \
+            filter=args.filter, bareground_thresh=args.bareground_thresh, out_fn=out_fn_base)
+    if writeall:
+        out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
+        print("Writing out %s\n" % out_fn)
+        iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
+    newmask = np.logical_and(rockmask, newmask)
 
     if 'snodas' in ds_dict.keys():
         #SNODAS snow depth filter
         snodas_thresh = args.snodas_thresh 
-        print("Applying SNODAS snow depth filter (masking values >= %0.2f m)" % snodas_thresh)
         #snow depth values are mm, convert to meters
         snodas_depth = iolib.ds_getma(ds_dict['snodas'])/1000.
-        if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
-            print("Writing out %s" % out_fn)
-            iolib.writeGTiff(snodas_depth, out_fn, src_ds=ds_dict['dem'])
-        snodas_mask = np.ma.masked_greater(snodas_depth, snodas_thresh)
-        #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
-        snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
-        if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_snodas_mask.tif'
-            print("Writing out %s\n" % out_fn)
-            iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
-        newmask = np.logical_and(snodas_mask, newmask)
+        if snodas_depth.count() > 0:
+            print("Applying SNODAS snow depth filter (masking values >= %0.2f m)" % snodas_thresh)
+            if writeall:
+                out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
+                print("Writing out %s" % out_fn)
+                iolib.writeGTiff(snodas_depth, out_fn, src_ds=ds_dict['dem'])
+            snodas_mask = np.ma.masked_greater(snodas_depth, snodas_thresh)
+            #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
+            snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
+            if writeall:
+                out_fn = os.path.splitext(dem_fn)[0]+'_snodas_mask.tif'
+                print("Writing out %s\n" % out_fn)
+                iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
+            newmask = np.logical_and(snodas_mask, newmask)
+        else:
+            print("SNODAS grid for input location and timestamp is empty!\nSkipping...\n")
 
     if 'modscag' in ds_dict.keys():
         #MODSCAG percent snowcover
