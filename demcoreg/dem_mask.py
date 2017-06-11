@@ -138,6 +138,8 @@ def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True, out_
         mask = np.logical_or(np.logical_or((l==31),(l==12)),(l==11))
     elif valid == 'not_forest':
         mask = ~(np.logical_or(np.logical_or((l==41),(l==42)),(l==43)))
+    elif valid == 'not_forest+not_water':
+        mask = ~(np.logical_or(np.logical_or(np.logical_or((l==41),(l==42)),(l==43)),(l==11)))
     else:
         print("Invalid mask type")
         mask = None
@@ -434,7 +436,7 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     return ds
 
 def getparser():
-    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest']
+    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water']
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
     #parser.add_argument('-outdir', default=None, help='Output directory')
