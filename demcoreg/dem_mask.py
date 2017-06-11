@@ -239,12 +239,14 @@ def get_lulc_mask(ds, lulc_source=None, mask_glaciers=True, filter='rock+ice+wat
         rockmask = mask_bareground(lulc_ds_warp, minperc=bareground_thresh, mask_glaciers=mask_glaciers, out_fn=out_fn)
     return rockmask
 
-def get_snodas(dem_dt, outdir=None):
+def get_snodas(dem_dt, outdir=None, code=1036):
     """Function to fetch and process SNODAS snow depth products for input datetime
 
     http://nsidc.org/data/docs/noaa/g02158_snodas_snow_cover_model/index.html
 
+    Product codes:
     1036 is snow depth
+    1034 is SWE
 
     filename format: us_ssmv11036tS__T0001TTNATS2015042205HP001.Hdr
 
@@ -256,10 +258,10 @@ def get_snodas(dem_dt, outdir=None):
     #Note: unmasked products (beyond CONUS) are only available from 2010-present
     if dem_dt >= datetime(2003,9,30) and dem_dt < datetime(2010,1,1):
         snodas_url_str = 'ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/masked/%Y/%m_%b/SNODAS_%Y%m%d.tar'
-        tar_subfn_str_fmt = 'us_ssmv11036tS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
+        tar_subfn_str_fmt = 'us_ssmv1%itS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
     elif dem_dt >= datetime(2010,1,1):
         snodas_url_str = 'ftp://sidads.colorado.edu/DATASETS/NOAA/G02158/unmasked/%Y/%m_%b/SNODAS_unmasked_%Y%m%d.tar'
-        tar_subfn_str_fmt = './zz_ssmv11036tS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
+        tar_subfn_str_fmt = './zz_ssmv1%itS__T0001TTNATS%%Y%%m%%d05HP001.%s.gz'
     else:
         print("No SNODAS data available for input date")
 
@@ -270,7 +272,7 @@ def get_snodas(dem_dt, outdir=None):
         tar = tarfile.open(snodas_tar_fn)
         #gunzip to extract both dat and Hdr files, tar.gz
         for ext in ('dat', 'Hdr'):
-            tar_subfn_str = tar_subfn_str_fmt % ext
+            tar_subfn_str = tar_subfn_str_fmt % (code, ext)
             tar_subfn_gz = dem_dt.strftime(tar_subfn_str)
             tar_subfn = os.path.splitext(tar_subfn_gz)[0]
             print(tar_subfn)
@@ -483,7 +485,7 @@ def main():
 
     ds_dict['snodas'] = None
     if args.snodas:
-        #Get SNODAS products for DEM timestamp
+        #Get SNODAS snow depth products for DEM timestamp
         snodas_min_dt = datetime(2003,9,30)
         if dem_dt >= snodas_min_dt: 
             snodas_outdir = os.path.join(datadir, 'snodas')
