@@ -59,8 +59,8 @@ n_iter=2000
 #max_disp=1000
 #max_disp=200
 #max_disp=40
-#max_disp=10
-max_disp=5
+max_disp=10
+#max_disp=5
 
 #ATM "resolution" should be ~10 m - finer for repeat tracks
 #atm_res=10.0
