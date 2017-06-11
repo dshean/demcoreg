@@ -10,9 +10,10 @@
 #qsub ~/bin/devel.pbs
 #cd topdir
 
-site=scg
+#site=scg
 #site=conus
 #site=hma
+site=ngozumpa
 
 #Coreg round number
 n=1
@@ -64,6 +65,9 @@ list_32m=$(cat ${todo_list})
 #Now create masks for each 32m DEM
 #Check settings for dem_mask - MODSCAG, SNODAS, TOA, etc.
 #parallel --jobs 32 --delay 1 'dem_mask.py --toa {}' ::: $list_32m
+#SnowEx
+#parallel --jobs 32 --delay 1 'dem_mask.py --filter not_forest+not_water --toa {}' ::: $list_32m
+#Note that parallel won't work with input for modscag username
 
 #Clean up existing pc_align runs
 #rm -r */*/*align */*/*trans.tif 

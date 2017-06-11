@@ -12,11 +12,13 @@ if [ ! -e $dem ] ; then
     exit
 fi
 
+ref=''
+
 #Define the reference DEM
 #1-arcsec SRTM (30 m) for HMA
 #ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
 #Round 1 after ICESat
-ref=/nobackupp8/deshean/hma/hma1_2016dec22/hma_2m_tile_20170220/hma_2m.vrt
+#ref=/nobackupp8/deshean/hma/hma1_2016dec22/hma_2m_tile_20170220/hma_2m.vrt
 
 #CONUS
 #Need to create vrt with 1 arcsec over areas where 1/3 is not avail
@@ -34,6 +36,20 @@ ref=/nobackupp8/deshean/hma/hma1_2016dec22/hma_2m_tile_20170220/hma_2m.vrt
 #2-m WV DEM mosaic, second round
 #ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_tile/conus_coreg3_mos_2m.vrt
 #ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_summer_tile/conus_coreg3_mos_2m_summer.vrt
+
+#Ngozumpa
+#2-m WV DEM mosaic
+#ref=/nobackupp8/deshean/hma/ngozumpa2/hma1_2016dec22/stereo/ngozumpa2_2m_ref-tile-0.tif
+
+#Mashel
+#ref=/nobackupp8/deshean/mashel/Rasters/dem_3ft_unitmeters-adj.tif
+
+#SnowEx
+#SBB
+#ref=/nobackup/deshean/snowex/aso/USCOSB20160926f1a1_dsm_vf_bf_masked.tif
+#GM
+#ref=/nobackup/deshean/snowex/aso/USCOGM20160926f1a1_dsm_1p5m_vf_bf_masked_trim.tif
+ref=/nobackup/deshean/snowex/stereo/gm/20160925_gm_2m_trans-tile-0.tif
 
 if [ ! -e $ref ] ; then
     echo "Unable to find ref DEM: $ref"
@@ -122,7 +138,7 @@ if [ -e $refdem_masked ] ; then
             echo
             apply_dem_translation.py ${dembase}-DEM_32m.tif $log
             apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-            #ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m.tif
+            ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
             #compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
         fi
     fi
