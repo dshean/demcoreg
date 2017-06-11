@@ -6,7 +6,7 @@ from distutils.core import setup
 #python setup.py sdist upload
 
 setup(name='demcoreg',
-    version='0.2.0',
+    version='0.3.0',
     description='Utilities for DEM co-registration',
     author='David Shean',
     author_email='dshean@gmail.com',
@@ -20,7 +20,7 @@ setup(name='demcoreg',
             'demcoreg/compute_dz.py', 'demcoreg/dem_align.py', \
             'demcoreg/dem_mask.py', 'demcoreg/dem_coreg.sh', 'demcoreg/dem_coreg_all.sh', \
             'demcoreg/vol_stats.py', 'demcoreg/robust_stats.py', \
-            'demcoreg/glas_proc.py', \
+            'demcoreg/glas_proc.py', 'demcoreg/filter_glas.py', \
             'demcoreg/get_nlcd.sh', 'demcoreg/get_bareground.sh', 'demcoreg/get_glacier_poly.sh']
 )
 
