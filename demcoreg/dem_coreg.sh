@@ -67,6 +67,8 @@ dem_mask=$demdir/${dembase}-DEM_32m_ref.tif
 
 if [ ! -e $dem_mask ] ; then
     echo "Unable to find reference DEM mask, need to run dem_mask.py"
+    echo "Ideally, run on low-res version of DEM:"
+    echo "dem_mask.py $demdir/${dembase}-DEM_32m.tif"
     exit
 fi
 
