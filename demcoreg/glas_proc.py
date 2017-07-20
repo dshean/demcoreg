@@ -27,7 +27,9 @@ import dem_mask
 
 #Ben's script for processing: index_point_data_h5.m
 
-#parallel -j 32 '../glas_proc.py {}' ::: */*.H5
+#cd /nobackupp8/deshean/icesat_glas/GLAH14.034
+#lfs setstripe -c 32 .
+#parallel --progress --delay 1 -j 32 '~/src/demcoreg/demcoreg/glas_proc.py {}' ::: */*.H5
 #cat */*conus_lulcfilt_demfilt.csv | sort -n | grep -v lat > GLAH14_tllz_conus_lulcfilt_demfilt.csv
 #cat */*hma_lulcfilt_demfilt.csv | sort -n | grep -v lat > GLAH14_tllz_hma_lulcfilt_demfilt.csv
 #clipsrc=/Volumes/d/hma/rgi/rgi_hma_aea_110kmbuffer_wgs84.shp
@@ -165,25 +167,27 @@ def main():
     #Max elevation std for sampled DEM values in padded window around shot
     max_DEMhiresArElv_std = 50.0
 
-    #CONUS
-    #xmin, xmax, ymin, ymax
-    conus_extent = (-125, -104, 31, 50)
-    extent = conus_extent
+    #name = 'hma'
     name = 'conus'
-    #NED 1/3 arcsec (10 m)
-    dem_fn = '/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt'
-    #NED 1 arcsec (30 m)
-    #dem_fn = '/nobackup/deshean/rpcdem/ned1/ned1_tiles_glac24k_115kmbuff.vrt'
-    #LULC
-    lulc_fn = dem_mask.get_nlcd()
 
-    #HMA
-    hma_extent = (66, 106, 25, 47)
-    extent = hma_extent
-    name = 'hma'
-    #SRTM-GL1 1 arcsec (30-m)
-    dem_fn = '/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt'
-    lulc_fn = dem_mask.get_bareground()
+    if name == 'conus':
+        #CONUS
+        #xmin, xmax, ymin, ymax
+        extent = (-125, -104, 31, 50)
+        #NED 1/3 arcsec (10 m)
+        dem_fn = '/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt'
+        #NED 1 arcsec (30 m)
+        #dem_fn = '/nobackup/deshean/rpcdem/ned1/ned1_tiles_glac24k_115kmbuff.vrt'
+        #LULC
+        lulc_fn = dem_mask.get_nlcd_fn()
+    elif name == 'hma':
+        #HMA
+        extent = (66, 106, 25, 47)
+        #SRTM-GL1 1 arcsec (30-m)
+        dem_fn = '/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt'
+        lulc_fn = dem_mask.get_bareground_fn()
+    else:
+        sys.exit("Other sites not supported at this time")
 
     f = h5py.File(fn)
     t = f.get('Data_40HZ/Time/d_UTCTime_40')[:]
@@ -306,20 +310,24 @@ def main():
     #out = np.ma.array(out, mask=~(valid_idx))
     #valid_idx = ~(np.any(np.ma.getmaskarray(out), axis=1))
 
-    lulc_ds = gdal.Open(lulc_fn)
-    print("Converting coords for LULC")
-    lulc_mX, lulc_mY = ds_sample_coord(lulc_ds, out[:,2], out[:,1], geolib.wgs_srs)
-    print("Sampling LULC")
-    lulc_samp = sample(lulc_ds, lulc_mX, lulc_mY, pad=0)
-    l = lulc_samp[:,0].data
-    if 'nlcd' in lulc_fn:
-        #l = l[:,np.newaxis]
-        #This passes rock and ice pixels
-        valid_idx *= np.logical_or((l==31),(l==12))
-    else:
-        minperc = 85
-        valid_idx *= (l >= minperc)
-    print("LULC: %i" % valid_idx.nonzero()[0].size)
+    if False:
+        lulc_ds = gdal.Open(lulc_fn)
+        print("Converting coords for LULC")
+        lulc_mX, lulc_mY = ds_sample_coord(lulc_ds, out[:,2], out[:,1], geolib.wgs_srs)
+        print("Sampling LULC")
+        lulc_samp = sample(lulc_ds, lulc_mX, lulc_mY, pad=0)
+        l = lulc_samp[:,0].data
+        if 'nlcd' in lulc_fn:
+            #l = l[:,np.newaxis]
+            #This passes rock and ice pixels
+            valid_idx *= np.logical_or((l==31),(l==12))
+        else:
+            minperc = 85
+            valid_idx *= (l >= minperc)
+        print("LULC: %i" % valid_idx.nonzero()[0].size)
+        if l.ndim == 1:
+            l = l[:,np.newaxis]
+
 
     #Extract our own DEM values
     dem_ds = gdal.Open(dem_fn)
@@ -339,16 +347,19 @@ def main():
     if valid_idx.nonzero()[0].size == 0:
         sys.exit("No valid points remain")
 
-    if l.ndim == 1:
-        l = l[:,np.newaxis]
-
     print("Writing out\n")
     dt_dyear = timelib.np_dt2decyear(timelib.o2dt(out[:,0]))[:,np.newaxis]
-    out = np.ma.hstack([dt_dyear, out, dem_samp, l])
+    if False:
+        out = np.ma.hstack([dt_dyear, out, dem_samp, l])
+        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
+    else:
+        out = np.ma.hstack([dt_dyear, out, dem_samp])
+        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
     out = out[valid_idx]
-    out_fn = os.path.splitext(fn)[0]+'_tllz_%s_lulcfilt_demfilt.csv' % name
+    #out_fn = os.path.splitext(fn)[0]+'_tllz_%s_lulcfilt_demfilt.csv' % name
+    out_fn = os.path.splitext(fn)[0]+'_tllz_%s_demfilt.csv' % name
     #header = 't,lat,lon,elev'
-    np.savetxt(out_fn, out, fmt='%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i', delimiter=',')
+    np.savetxt(out_fn, out, fmt=fmt, delimiter=',')
     writevrt(out_fn)
 
 if __name__ == "__main__":

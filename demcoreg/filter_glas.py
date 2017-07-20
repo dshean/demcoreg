@@ -17,14 +17,20 @@ cpt_rainbow = gmtColormap.get_rainbow()
 import glas_proc
 
 min_pts = 100
-glas_npz_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_hma_lulcfilt_demfilt.npz'
-#glas_csv_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_hma_lulcfilt_demfilt.csv'
-#glas_pts = np.loadtxt(glas_csv_fn, delimiter=',')
-#np.savez_compressed(glas_npz_fn, glas_pts)
+site = 'conus'
+#glas_npz_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_%s_lulcfilt_demfilt.npz' % site
+glas_npz_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_%s_demfilt.npz' % site
+if not os.path.exists(glas_npz_fn):
+    glas_csv_fn = os.path.splitext(glas_npz_fn)[0]+'.csv'
+    print("Loading csv: %s" % glas_csv_fn)
+    glas_pts = np.loadtxt(glas_csv_fn, delimiter=',')
+    print("Saving npz: %s" % glas_npz_fn)
+    np.savez_compressed(glas_npz_fn, glas_pts)
+else:
+    #This takes ~5 seconds to load ~9M records with 8 fields
+    print("Loading npz: %s" % glas_npz_fn)
+    glas_pts = np.load(glas_npz_fn)['arr_0']
 
-#This takes ~5 seconds to load ~9M records with 8 fields
-print("Loading points: %s" % glas_npz_fn)
-glas_pts = np.load(glas_npz_fn)['arr_0']
 pt_srs = geolib.wgs_srs
 
 dem_fn_list = sys.argv[1:]
@@ -45,16 +51,22 @@ for n,dem_fn in enumerate(dem_fn_list):
         continue
 
     dem_mask_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
-    print("Loading Masked DEM: %s" % dem_mask_fn)
-    dem_mask_ds = gdal.Open(dem_mask_fn) 
-    dem_mask = iolib.ds_getma(dem_mask_ds) 
+    if os.path.exists(dem_mask_fn):
+        print("Loading Masked DEM: %s" % dem_mask_fn)
+        dem_mask_ds = gdal.Open(dem_mask_fn) 
+        dem_mask = iolib.ds_getma(dem_mask_ds) 
+    else:
+        dem_mask_ds = dem_ds
+        dem_mask = dem_ma
 
     print("Sampling DEM at masked point locations") 
     glas_pts_fltr = glas_pts[idx]
 
     print("Writing out %i points after spatial filter" % glas_pts_fltr.shape[0]) 
     out_csv_fn = os.path.splitext(dem_fn)[0]+'_glas.csv'
-    fmt='%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
+    #This is format for LULC/bareground in last column
+    #fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
+    fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
     np.savetxt(out_csv_fn, glas_pts_fltr, fmt=fmt, delimiter=',')
 
     x_fltr = glas_pts_fltr[:,3]
@@ -119,7 +131,8 @@ for n,dem_fn in enumerate(dem_fn_list):
         vmax = 2009.77587047
         im3 = ax3.imshow(hs_ma, cmap='gray', clim=hs_clim, alpha=0.5)
         sc3 = ax3.scatter(pX_fltr, pY_fltr, s=1, c=c, vmin=vmin, vmax=vmax, edgecolors='none')
-        cbar = pltlib.add_cbar(ax3, sc3, label='Pt Year', cbar_kwargs={'fmt':'%0.2f'})
+        #cbar = pltlib.add_cbar(ax3, sc3, label='Pt Year', cbar_kwargs={'format':'%0.2f'})
+        cbar = pltlib.add_cbar(ax3, sc3, label='Pt Year')
 
         #Plot dz
         c = dz
