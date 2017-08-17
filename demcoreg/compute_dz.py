@@ -40,7 +40,7 @@ def main():
     fn_list = [dem1_fn, dem2_fn]
 
     print("Warping DEMs to same res/extent/proj")
-    dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent='intersection', res='max')
+    dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent='intersection', res='max', t_srs='first')
 
     outdir = args.outdir
     if outdir is None:
