@@ -71,7 +71,7 @@ def get_bareground_fn(datadir=None):
 
 #Download latest global RGI glacier db
 def get_glacier_poly(datadir=None):
-    """Calls external shell script `get_glacier_poly.sh` to fetch:
+    """Calls external shell script `get_rgi.sh` to fetch:
 
     Randolph Glacier Inventory (RGI) glacier outline shapefiles 
 
@@ -85,7 +85,7 @@ def get_glacier_poly(datadir=None):
         datadir = iolib.get_datadir()
     rgi_fn = os.path.join(datadir, 'rgi50/regions/rgi50_merge.shp')
     if not os.path.exists(rgi_fn):
-        cmd = ['get_glacier_poly.sh',]
+        cmd = ['get_rgi.sh',]
         subprocess.call(cmd)
     return rgi_fn 
 
