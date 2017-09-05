@@ -1,27 +1,30 @@
 #! /usr/bin/env python
 
-#David Shean
-#dshean@gmail.com
-
-#Utility to compute elevation change from two input DEMs
-#Original version computed both Eulerian and Lagrangian elevation change - this version is lobotomized
+"""
+Compute difference between two rasters
+"""
 
 import sys
 import os
 import re
 import argparse
+from datetime import timedelta
 
 import numpy as np
 
+from pygeotools.lib import timelib 
 from pygeotools.lib import iolib
 from pygeotools.lib import malib
 from pygeotools.lib import warplib
 
 def getparser():
     parser = argparse.ArgumentParser(description="Compute difference between two rasters")
+    parser.add_argument('-outdir', default=None, help='Output directory')
+    parser.add_argument('-tr', default='max', help='Output resolution (default: %(default)s)')
+    parser.add_argument('-te', default='intersection', help='Output extent (default: %(default)s)')
+    parser.add_argument('-t_srs', default='first', help='Output projection (default: %(default)s)')
     parser.add_argument('fn1', type=str, help='Raster filename 1')
     parser.add_argument('fn2', type=str, help='Raster filename 2')
-    parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
 
 def main():
@@ -40,7 +43,8 @@ def main():
     fn_list = [dem1_fn, dem2_fn]
 
     print("Warping DEMs to same res/extent/proj")
-    dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent='intersection', res='max', t_srs='first')
+    #This will check input param for validity, could do beforehand
+    dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent=args.te, res=args.tr, t_srs=args.t_srs)
 
     outdir = args.outdir
     if outdir is None:
@@ -61,7 +65,7 @@ def main():
     #Compute dz/dt rates if possible, in m/yr
     rates = True 
     if rates:
-        #Attempt to load timestamp arrays (for mosaics)
+        #Attempt to load timestamp arrays (for mosaics) if present
         t1_fn = dem1_fn_base+'_ts.tif'
         t2_fn = dem2_fn_base+'_ts.tif'
         if os.path.exists(t1_fn) and os.path.exists(t2_fn):
@@ -74,16 +78,11 @@ def main():
             t_factor = t2 - t1
             t_factor /= 365.25
         else:
-            from datetime import timedelta
-            from pygeotools.lib import timelib 
+            #Attempt to extract timestamps from input filenames
             t1 = timelib.fn_getdatetime(dem1_fn)
             t2 = timelib.fn_getdatetime(dem2_fn)
             if t1 is not None and t2 is not None and t1 != t2:  
                 dt = t2 - t1
-                #Might be better to do this with dateutil - not sure about leap years
-                #from dateutil.relativedelta import relativedelta
-                #dt = relativedelta(dt1, dt2)) 
-                #dt.years
                 year = timedelta(days=365.25)
                 t_factor = abs(dt.total_seconds()/year.total_seconds()) 
                 print("Time differences is %s, dh/%0.3f" % (dt, t_factor))
@@ -101,7 +100,7 @@ def main():
     common_mask = malib.common_mask([dem1, dem2])
 
     #Compute relative elevation difference with Eulerian approach 
-    print("Computing elevation difference with Eulerian approach")
+    print("Computing eulerian elevation difference")
     diff_euler = np.ma.array(dem2-dem1, mask=common_mask)
 
     if True:
