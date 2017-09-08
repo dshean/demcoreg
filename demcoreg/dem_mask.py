@@ -558,15 +558,17 @@ def main():
     dem = iolib.ds_getma(ds_dict['dem'])
     newmask = ~(np.ma.getmaskarray(dem))
 
+    #Basename for output files
+    out_fn_base = os.path.splitext(dem_fn)[0]
+
     #Generate a rockmask
     #Note: these now have RGI 5.0 glacier polygons removed
     #if 'lulc' in ds_dict.keys():
     #We are almost always going to want LULC mask
-    out_fn_base = os.path.splitext(dem_fn)[0]
     rockmask = get_lulc_mask(dem_ds, mask_glaciers=mask_glaciers, \
             filter=args.filter, bareground_thresh=args.bareground_thresh, out_fn=out_fn_base)
     if writeall:
-        out_fn = os.path.splitext(dem_fn)[0]+'_rockmask.tif'
+        out_fn = out_fn_base+'_rockmask.tif'
         print("Writing out %s\n" % out_fn)
         iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
     newmask = np.logical_and(rockmask, newmask)
@@ -579,14 +581,14 @@ def main():
         if snodas_depth.count() > 0:
             print("Applying SNODAS snow depth filter (masking values >= %0.2f m)" % snodas_thresh)
             if writeall:
-                out_fn = os.path.splitext(dem_fn)[0]+'_snodas_depth.tif'
+                out_fn = out_fn_base+'_snodas_depth.tif'
                 print("Writing out %s" % out_fn)
                 iolib.writeGTiff(snodas_depth, out_fn, src_ds=ds_dict['dem'])
             snodas_mask = np.ma.masked_greater(snodas_depth, snodas_thresh)
             #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
             snodas_mask = ~(np.ma.getmaskarray(snodas_mask))
             if writeall:
-                out_fn = os.path.splitext(dem_fn)[0]+'_snodas_mask.tif'
+                out_fn = out_fn_base+'_snodas_mask.tif'
                 print("Writing out %s\n" % out_fn)
                 iolib.writeGTiff(snodas_mask, out_fn, src_ds=ds_dict['dem'])
             newmask = np.logical_and(snodas_mask, newmask)
@@ -599,14 +601,14 @@ def main():
         print("Applying MODSCAG fractional snow cover percent filter (masking values >= %0.1f%%)" % modscag_thresh)
         modscag_perc = iolib.ds_getma(ds_dict['modscag'])
         if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_modscag_perc.tif'
+            out_fn = out_fn_base+'_modscag_perc.tif'
             print("Writing out %s" % out_fn)
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=ds_dict['dem'])
         modscag_mask = (modscag_perc.filled(0) >= modscag_thresh) 
         #This should be 1 for valid surfaces with no snow, 0 for snowcovered surfaces
         modscag_mask = ~(modscag_mask)
         if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_modscag_mask.tif'
+            out_fn = out_fn_base+'_modscag_mask.tif'
             print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(modscag_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(modscag_mask, newmask)
@@ -620,7 +622,7 @@ def main():
         #This should be 1 for valid surfaces, 0 for snowcovered surfaces
         toa_mask = ~(np.ma.getmaskarray(toa_mask))
         if writeall:
-            out_fn = os.path.splitext(dem_fn)[0]+'_toamask.tif'
+            out_fn = out_fn_base+'_toamask.tif'
             print("Writing out %s\n" % out_fn)
             iolib.writeGTiff(toa_mask, out_fn, src_ds=ds_dict['dem'])
         newmask = np.logical_and(toa_mask, newmask)
@@ -657,7 +659,7 @@ def main():
     #if (validpx_count > min_validpx_count) and (validpx_std > min_validpx_std):
     if (validpx_count > min_validpx_count):
         #Write out final mask
-        out_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
+        out_fn = out_fn_base+'_ref.tif'
         print("Writing out %s\n" % out_fn)
         iolib.writeGTiff(newdem, out_fn, src_ds=ds_dict['dem'])
     else:
