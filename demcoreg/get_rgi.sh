@@ -31,16 +31,15 @@ orig_zip_md5=95bd0486301073bbbe26988303fdaa1d
 #Should check OS with uname
 if [ -x "$(command -v md5)" ]; then
     #OS X
-    md5=md5
+    zip_md5=$(md5 $rgi_zip_fn | awk '{print $NF}')
 elif [ -x "$(command -v md5sum)" ]; then
     #Linux/Unix
-    md5=mdfsum
+    zip_md5=$(md5sum $rgi_zip_fn | awk '{print $1}')
 else
-    md5=none
+    zip_md5=none
 fi
 
-if [ $md5 != "none" ] ; then
-    zip_md5=$($md5 $rgi_zip_fn | awk '{print $NF}')
+if [ $zip_md5 != "none" ] ; then
     if [ "$zip_md5" != "$orig_zip_md5" ] ; then
         echo "MD5 checksum failed for $rgi_zip_fn:"
         echo "Expected: $orig_zip_md5"
