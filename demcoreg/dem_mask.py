@@ -83,7 +83,9 @@ def get_glacier_poly(datadir=None):
     """
     if datadir is None:
         datadir = iolib.get_datadir()
-    rgi_fn = os.path.join(datadir, 'rgi50/regions/rgi50_merge.shp')
+    #rgi_fn = os.path.join(datadir, 'rgi50/regions/rgi50_merge.shp')
+    #Update to rgi60, should have this returned from get_rgi.sh
+    rgi_fn = os.path.join(datadir, 'rgi60/regions/rgi60_merge.shp')
     if not os.path.exists(rgi_fn):
         cmd = ['get_rgi.sh',]
         subprocess.call(cmd)
@@ -96,14 +98,8 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
     if datadir is None:
         datadir = iolib.get_datadir()
     print("Masking glaciers")
-    #Use updated glacier outlines to mask glaciers and perennial snowfields 
-    #nlcd has an older glacier mask
-    #Downloaded from http://www.glims.org/RGI/rgi50_files/02_rgi50_WesternCanadaUS.zip
-    #ogr2ogr -t_srs EPSG:32610 02_rgi50_WesternCanadaUS_32610.shp 02_rgi50_WesternCanadaUS.shp
-    #Manual selection over study area in QGIS
     if glac_shp_fn is None:
-        glac_shp_dir = os.path.join(datadir, 'rgi50/regions')
-        glac_shp_fn = os.path.join(glac_shp_dir, 'rgi50_merge.shp')
+        glac_shp_fn = get_glacier_poly(datadir)
 
     if not os.path.exists(glac_shp_fn):
         print("Unable to locate glacier shp: %s" % glac_shp_fn)
@@ -149,13 +145,14 @@ def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True, out_
         iolib.writeGTiff(l, out_fn, ds)
     l = None
     if mask_glaciers:
-        #Need better handling here, check to make sure 
-        #Use updated 24k glacier outlines
         if datadir is None:
             datadir = iolib.get_datadir()
-        glac_shp_fn = os.path.join(datadir, 'conus_glacierpoly_24k/conus_glacierpoly_24k_32610.shp')
-        if not os.path.exists(glac_shp_fn):
-            glac_shp_fn = None
+        #Note: RGI6.0 includes Fountain's 24K polygons, no longer need to maintain two separate shp
+        #Use updated 24k glacier outlines
+        #glac_shp_fn = os.path.join(datadir, 'conus_glacierpoly_24k/conus_glacierpoly_24k_32610.shp')
+        #if not os.path.exists(glac_shp_fn):
+        #    glac_shp_fn = None
+        glac_shp_fn = None
         icemask = get_icemask(ds, datadir=datadir, glac_shp_fn=glac_shp_fn)
         if icemask is not None:
             mask *= icemask
@@ -562,7 +559,7 @@ def main():
     out_fn_base = os.path.splitext(dem_fn)[0]
 
     #Generate a rockmask
-    #Note: these now have RGI 5.0 glacier polygons removed
+    #Note: these now have RGI glacier polygons removed
     #if 'lulc' in ds_dict.keys():
     #We are almost always going to want LULC mask
     rockmask = get_lulc_mask(dem_ds, mask_glaciers=mask_glaciers, \
