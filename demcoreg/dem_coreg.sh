@@ -5,21 +5,18 @@
 
 #Input should be highest res version of DEM (i.e., DEM_2m.tif)
 dem=$1
-#ref=$2
-
 if [ ! -e $dem ] ; then
     echo "Unable to find source DEM: $dem"
     exit
 fi
 
-ref=''
+ref=$2
 
-#Define the reference DEM
+#Hardcode reference DEM
 #1-arcsec SRTM (30 m) for HMA
 #ref=/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt
 #Round 1 after ICESat
 #ref=/nobackupp8/deshean/hma/hma1_2016dec22/hma_2m_tile_20170220/hma_2m.vrt
-
 #CONUS
 #Need to create vrt with 1 arcsec over areas where 1/3 is not avail
 #1-arcsec NED (30 m) for CONUS
@@ -28,7 +25,6 @@ ref=''
 #ref=/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt
 #1-m lidar vrt
 #ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
-
 #2-m WV DEM mosaic, first round
 #ref=/nobackup/deshean/conus/dem2/conus_coreg1_mos_2m_tile/conus_coreg1_mos_2m.vrt
 #2-m WV DEM mosaic, second round
@@ -36,20 +32,17 @@ ref=''
 #2-m WV DEM mosaic, second round
 #ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_tile/conus_coreg3_mos_2m.vrt
 #ref=/nobackup/deshean/conus/dem2/conus_coreg3_mos_2m_summer_tile/conus_coreg3_mos_2m_summer.vrt
-
 #Ngozumpa
 #2-m WV DEM mosaic
 #ref=/nobackupp8/deshean/hma/ngozumpa2/hma1_2016dec22/stereo/ngozumpa2_2m_ref-tile-0.tif
-
 #Mashel
 #ref=/nobackupp8/deshean/mashel/Rasters/dem_3ft_unitmeters-adj.tif
-
 #SnowEx
 #SBB
 #ref=/nobackup/deshean/snowex/aso/USCOSB20160926f1a1_dsm_vf_bf_masked.tif
 #GM
 #ref=/nobackup/deshean/snowex/aso/USCOGM20160926f1a1_dsm_1p5m_vf_bf_masked_trim.tif
-ref=/nobackup/deshean/snowex/stereo/gm/20160925_gm_2m_trans-tile-0.tif
+#ref=/nobackup/deshean/snowex/stereo/gm/20160925_gm_2m_trans-tile-0.tif
 
 if [ ! -e $ref ] ; then
     echo "Unable to find ref DEM: $ref"
