@@ -36,92 +36,6 @@ import dem_mask
 #vrt=GLAH14_tllz_hma_lulcfilt_demfilt.vrt
 #ogr2ogr -progress -overwrite -clipsrc $clipsrc ${vrt%.*}_clip.shp $vrt
 
-def ds_sample_coord(ds, x, y, xy_srs=geolib.wgs_srs):
-    """Convert input coordinates to map coordinates of input dataset
-    """
-    #Convert lat/lon to projected srs
-    mX, mY, mZ = geolib.cT_helper(x, y, 0, xy_srs, geolib.get_ds_srs(ds))
-    return mX, mY
-
-#This is arbitrary sampling function
-#Assumes input map coords are identical to ds srs
-def sample(ds, mX, mY, bn=1, pad=0, circ=False):
-    """Sample input dataset at given coordinates
-    """
-    shape = (ds.RasterYSize, ds.RasterXSize)
-    gt = ds.GetGeoTransform()
-    b = ds.GetRasterBand(bn)
-    b_ndv = iolib.get_ndv_b(b)
-    b_dtype = b.DataType
-    np_dtype = iolib.gdal2np_dtype(b)
-
-    #This will sample an area corresponding to diameter of ICESat shot
-    if pad == 'glas':
-        spotsize = 70
-        pad = int(np.ceil(((spotsize/gt[1])-1)/2))
-
-    mX = np.atleast_1d(mX)
-    mY = np.atleast_1d(mY)
-    #Convert to pixel indices
-    pX, pY = geolib.mapToPixel(mX, mY, gt)
-    #Mask anything outside image dimensions
-    pX = np.ma.masked_outside(pX, 0, shape[1]-1)
-    pY = np.ma.masked_outside(pY, 0, shape[0]-1)
-    common_mask = (~(np.logical_or(np.ma.getmaskarray(pX), np.ma.getmaskarray(pY)))).nonzero()[0]
-
-    #Define x and y sample windows
-    xwin=pad*2+1
-    ywin=pad*2+1
-    #This sets the minimum number of valid pixels, default 50%
-    min_samp_perc = 50 
-    min_samp = int(np.ceil((min_samp_perc/100.)*xwin*ywin))
-    #Create circular mask to simulate spot
-    #This only makes sense for for xwin > 3 
-    if circ:
-        circ_mask = filtlib.circular_mask(xwin)
-        min_samp = int(np.ceil((min_samp_perc/100.)*circ_mask.nonzero()[0].size))
-
-    pX_int = pX[common_mask].data
-    pY_int = pY[common_mask].data
-    #Round to nearest integer indices
-    pX_int = np.around(pX_int).astype(int)
-    pY_int = np.around(pY_int).astype(int)
-    #print("Valid extent: %i" % pX_int.size)
-
-    #Create empty array to hold output
-    stats = np.full((pX_int.size, 2), b_ndv, dtype=np_dtype)
-
-    r = gdal.GRA_NearestNeighbour
-    #r = gdal.GRA_Cubic
-
-    for i in range(pX_int.size):
-        #Could have float offsets here with GDAL resampling
-        samp = np.ma.masked_equal(b.ReadAsArray(xoff=pX_int[i]-pad, yoff=pY_int[i]-pad, win_xsize=xwin, win_ysize=ywin, resample_alg=r), b_ndv)
-        if circ:
-            samp = np.ma.array(samp, circ_mask)
-        if samp.count() >= min_samp:
-            if min_samp > 1:
-                #samp_med = samp.mean()
-                samp_med = malib.fast_median(samp)
-                #samp_mad = samp.std()
-                samp_mad = malib.mad(samp)
-                stats[i][0] = samp_med 
-                stats[i][1] = samp_mad
-            else:
-                stats[i][0] = samp[0]
-                stats[i][1] = 0
-            #vals, resid, coef = geolib.ma_fitplane(samp, gt=[0, gt[1], 0, 0, 0, gt[5]], perc=None)
-            #Compute slope and aspect from plane
-            #rmse = malib.rmse(resid)
-
-    stats = np.ma.masked_equal(stats, b_ndv)
-    #Create empty array with as input points
-    out = np.full((pX.size, 2), b_ndv, dtype=np_dtype)
-    #Populate with valid samples
-    out[common_mask, :] = stats
-    out = np.ma.masked_equal(out, b_ndv)
-    return out
-
 def getparser():
     parser = argparse.ArgumentParser(description="Process and filter ICESat GLAS points")
     parser.add_argument('fn', type=str, help='GLAH14 HDF5 filename')
@@ -297,9 +211,9 @@ def main():
     if False:
         lulc_ds = gdal.Open(lulc_fn)
         print("Converting coords for LULC")
-        lulc_mX, lulc_mY = ds_sample_coord(lulc_ds, out[:,2], out[:,1], geolib.wgs_srs)
+        lulc_mX, lulc_mY = geolib.ds_cT(lulc_ds, out[:,2], out[:,1], geolib.wgs_srs)
         print("Sampling LULC")
-        lulc_samp = sample(lulc_ds, lulc_mX, lulc_mY, pad=0)
+        lulc_samp = geolib.sample(lulc_ds, lulc_mX, lulc_mY, pad=0)
         l = lulc_samp[:,0].data
         if 'nlcd' in lulc_fn:
             #l = l[:,np.newaxis]
@@ -316,9 +230,9 @@ def main():
     #Extract our own DEM values
     dem_ds = gdal.Open(dem_fn)
     print("Converting coords for DEM")
-    dem_mX, dem_mY = ds_sample_coord(dem_ds, out[:,2], out[:,1], geolib.wgs_srs)
+    dem_mX, dem_mY = geolib.ds_cT(dem_ds, out[:,2], out[:,1], geolib.wgs_srs)
     print("Sampling DEM")
-    dem_samp = sample(dem_ds, dem_mX, dem_mY, pad='glas')
+    dem_samp = geolib.sample(dem_ds, dem_mX, dem_mY, pad='glas')
     abs_dem_z_diff = np.abs(out[:,3] - dem_samp[:,0])
 
     valid_idx *= ~(np.ma.getmaskarray(abs_dem_z_diff))
