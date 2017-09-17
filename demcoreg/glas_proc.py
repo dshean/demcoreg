@@ -36,22 +36,6 @@ import dem_mask
 #vrt=GLAH14_tllz_hma_lulcfilt_demfilt.vrt
 #ogr2ogr -progress -overwrite -clipsrc $clipsrc ${vrt%.*}_clip.shp $vrt
 
-def writevrt(out_csv,srs='EPSG:4326'):
-    out_vrt = os.path.splitext(out_csv)[0]+'.vrt'
-    out_csv = os.path.split(out_csv)[-1]
-    x = 'field_4'
-    y = 'field_3'
-    f = open(out_vrt, 'w')
-    f.write('<OGRVRTDataSource>\n')
-    f.write('   <OGRVRTLayer name="%s">\n' % os.path.splitext(out_csv)[0])
-    f.write('        <SrcDataSource>%s</SrcDataSource>\n' % out_csv)
-    f.write('        <GeometryType>wkbPoint</GeometryType>\n')
-    f.write('        <LayerSRS>%s</LayerSRS>\n' % srs)
-    f.write('        <GeometryField encoding="PointFromColumns" x="%s" y="%s"/>\n' % (x, y))
-    f.write('    </OGRVRTLayer>\n')
-    f.write('</OGRVRTDataSource>\n')
-    f.close()
-
 def ds_sample_coord(ds, x, y, xy_srs=geolib.wgs_srs):
     """Convert input coordinates to map coordinates of input dataset
     """
@@ -360,7 +344,7 @@ def main():
     out_fn = os.path.splitext(fn)[0]+'_tllz_%s_demfilt.csv' % name
     #header = 't,lat,lon,elev'
     np.savetxt(out_fn, out, fmt=fmt, delimiter=',')
-    writevrt(out_fn)
+    iolib.writevrt(out_fn, x='field_4', y='field_3')
 
 if __name__ == "__main__":
     main()
