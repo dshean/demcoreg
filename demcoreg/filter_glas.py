@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 
 from imview.lib import gmtColormap, pltlib
 cpt_rainbow = gmtColormap.get_rainbow()
-import glas_proc
 
 min_pts = 100
 site = 'conus'
@@ -77,7 +76,7 @@ for n,dem_fn in enumerate(dem_fn_list):
     pX_fltr = np.atleast_1d(pX_fltr)
     pY_fltr = np.atleast_1d(pY_fltr)
     #This returns median and mad
-    samp = glas_proc.sample(dem_mask_ds, mX_fltr, mY_fltr, pad=1)
+    samp = geolib.sample(dem_mask_ds, mX_fltr, mY_fltr, pad=1)
     samp_idx = ~(np.ma.getmaskarray(samp[:,0]))
     if samp_idx.nonzero()[0].size == 0:
         print("No points after mask")
