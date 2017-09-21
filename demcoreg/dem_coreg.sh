@@ -3,6 +3,9 @@
 #This will co-register a single DEM
 #See dem_coreg_all.sh for batch processing
 
+#Exit if error
+set -e
+
 #Input should be highest res version of DEM (i.e., DEM_2m.tif)
 dem=$1
 if [ ! -e $dem ] ; then
@@ -53,10 +56,11 @@ demdir=$(dirname $dem)
 dembase=$(basename $dem)
 #This will be pc_align output directory
 outdir=${dembase%.*}_grid_align
-dembase=$(echo $dembase | awk -F'-' '{print $1}')
+dembase=$(echo ${dembase%.*} | awk -F'-' '{print $1}')
 
 #This is DEM_32m reference mask output by dem_mask.py
-dem_mask=$demdir/${dembase}-DEM_32m_ref.tif
+#dem_mask=$demdir/${dembase}-DEM_32m_ref.tif
+dem_mask=$(ls $demdir/${dembase}*_ref.tif | head -1)
 
 if [ ! -e $dem_mask ] ; then
     echo "Unable to find reference DEM mask, need to run dem_mask.py"
