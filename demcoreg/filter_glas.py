@@ -63,9 +63,12 @@ for n,dem_fn in enumerate(dem_fn_list):
 
     print("Writing out %i points after spatial filter" % glas_pts_fltr.shape[0]) 
     out_csv_fn = os.path.splitext(dem_fn)[0]+'_glas.csv'
-    #This is format for LULC/bareground in last column
-    #fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
-    fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
+    if glas_pts_fltr.shape[1] == 8:
+        #This is format for LULC/bareground in last column
+        #Some older versions of the regional points have this format
+        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
+    else:
+        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
     np.savetxt(out_csv_fn, glas_pts_fltr, fmt=fmt, delimiter=',')
 
     x_fltr = glas_pts_fltr[:,3]
