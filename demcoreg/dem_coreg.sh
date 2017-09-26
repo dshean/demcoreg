@@ -60,7 +60,7 @@ dembase=$(echo ${dembase%.*} | awk -F'-' '{print $1}')
 
 #This is DEM_32m reference mask output by dem_mask.py
 #dem_mask=$demdir/${dembase}-DEM_32m_ref.tif
-dem_mask=$(ls $demdir/${dembase}*_ref.tif | head -1)
+dem_mask=$(ls $demdir/${dembase}*_ref.tif | tail -1)
 
 if [ ! -e $dem_mask ] ; then
     echo "Unable to find reference DEM mask, need to run dem_mask.py"
@@ -135,10 +135,15 @@ if [ -e $refdem_masked ] ; then
         log=$(ls -t $outdir/*.log | head -1)
         if grep -q 'Translation vector' $log ; then
             echo
-            apply_dem_translation.py ${dembase}-DEM_32m.tif $log
-            apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-            ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
-            #compute_dh.py $(basename $refdem) ${dembase}-DEM_8m_trans.tif
+            if [ -e ${dembase}-DEM_32m.tif ] ; then 
+                apply_dem_translation.py ${dembase}-DEM_32m.tif $log
+            fi
+            if [ -e ${dembase}-DEM_8m.tif ] ; then 
+                apply_dem_translation.py ${dembase}-DEM_8m.tif $log
+            fi
+            if [ -e ${dembase}-DEM_2m.tif ] ; then 
+                ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
+            fi
         fi
     fi
 fi
