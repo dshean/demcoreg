@@ -49,6 +49,10 @@ def main():
     outdir = args.outdir
     if outdir is None:
         outdir = os.path.split(dem1_fn)[0]
+
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     outprefix = os.path.splitext(os.path.split(dem1_fn)[1])[0]+'_'+os.path.splitext(os.path.split(dem2_fn)[1])[0]
 
     print("Loading input DEMs into masked arrays")
