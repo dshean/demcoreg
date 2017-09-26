@@ -12,28 +12,36 @@
 #Clean up all previous runs
 clean=true
 
-#Generate TOA masks
 #Some earlier r100 xml files lack the necessary tags for toa.  Need to copy original xml files from lfe
 #ssh lfe
 #cd ~/hma
-#for i in $list; do d=$(find . -name $i); shiftc -R $d/*xml /nobackupp8/deshean/hma/sites/khumbu/rerun/$i/ ; done
+#nbdir=/nobackupp8/deshean/hma/sites/khumbu/rerun
+#nbdir=/nobackupp8/deshean/conus_combined/sites/rainier/rerun
+#pushd $nbdir
+#list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
+#pushd
+#NOTE: these need to be tightened, can unnecessarily transfer full directory again
+#for i in $list_dir; do d=$(find . -name $i); shiftc -R $d/*xml $nbdir/$i/ ; done
+#for i in $list_dir; do d=$(find conus*/ -name $i); shiftc -R $d/*xml $nbdir/$i/ ; done
 
-#If we have existing orthoimages, compute top-of-atmosphere reflectance 
+#Compute top-of-atmosphere reflectance 
 #Uses toa.sh, toa.py, and dglib from https://github.com/dshean/dgtools 
 #parallel --jobs 16 --delay 2 'toa.sh {}' ::: $list_dir
 
-#Optional, copy DEMs and toa to subdir
+#Copy DEMs and toa to subdir
 #mkdir dem_coreg
 #rsync -av --include='*-DEM_*.tif' --include '*toa.tif' --include='*/' --exclude='*' *00 dem_coreg/
+#cd dem_coreg
 
 #Default is for all WV/GE/QB subdir
-list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif)
 list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
+list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif)
 list_2m=$(echo $list_32m | sed 's/-DEM_32m.tif/-DEM_2m.tif/g')
 list_32m_done=$(ls -Sr *00/dem*/*-DEM_32m_trans.tif)
 
 #Input reference DEM
 #Should be existing 2-m mosaic for entire region
+#/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
 ref=$1
 #If we don't find it, create a reference
 if [ ! -n "$ref" ] ; then 
@@ -93,8 +101,9 @@ fi
 #Now create masks for each 32m DEM using dem_mask.py
 #Check settings for dem_mask - MODSCAG, SNODAS, TOA, etc.
 #Note that parallel won't work with input for modscag username
-#parallel --delay 1 'dem_mask.py --toa {}' ::: $list_32m
-parallel --delay 1 'dem_mask.py {}' ::: $list_32m
+#parallel --delay 1 'dem_mask.py {}' ::: $list_32m
+#Use TOA mask
+parallel --delay 1 'dem_mask.py --toa {}' ::: $list_32m
 #SnowEx
 #parallel --jobs 32 --delay 1 'dem_mask.py --filter not_forest+not_water --toa {}' ::: $list_32m
 
