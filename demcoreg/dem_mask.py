@@ -114,10 +114,10 @@ def get_icemask(ds, datadir=None, glac_shp_fn=None):
 def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True, out_fn=None):
     """Generate raster mask for exposed rock in NLCD data
     """
-    print("Loading nlcd")
+    print("Loading NLCD LULC")
     b = ds.GetRasterBand(1)
     l = b.ReadAsArray()
-    print("Isolating rock")
+    print("Filtering NLCD LULC")
     #Original nlcd products have nan as ndv
         #12 - ice
         #31 - rock
