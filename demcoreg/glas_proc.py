@@ -21,17 +21,27 @@ from pygeotools.lib import timelib, geolib, iolib, malib, filtlib
 #This is needed for LULC products
 import dem_mask
 
-#Download all GLAH14 products
+#Before running, download all GLAH14 products
 #lftp ftp://n5eil01u.ecs.nsidc.org/DP5/GLAS/
 #mirror --parallel=16 GLAH14.034
 
-#Ben's script for processing: index_point_data_h5.m
+"""
+cd GLAH14.034
+lfs setstripe -c 32 .
+for site in conus hma
+do
+    parallel --progress --delay 1 -j 32 "~/src/demcoreg/demcoreg/glas_proc.py {} $site" ::: */*.H5
+    #Combine output
+    for ext in ${site}.csv ${site}_refdemfilt.csv ${site}_refdemfilt_lulcfilt.csv
+    do
+        first=$(ls */*$ext | head -1)
+        head -1 $first > GLAH14_$ext
+        cat */*$ext | sort -n | grep -v lat >> GLAH14_$ext
+    done
+done
+"""
 
-#cd /nobackupp8/deshean/icesat_glas/GLAH14.034
-#lfs setstripe -c 32 .
-#parallel --progress --delay 1 -j 32 '~/src/demcoreg/demcoreg/glas_proc.py {}' ::: */*.H5
-#cat */*conus_lulcfilt_demfilt.csv | sort -n | grep -v lat > GLAH14_tllz_conus_lulcfilt_demfilt.csv
-#cat */*hma_lulcfilt_demfilt.csv | sort -n | grep -v lat > GLAH14_tllz_hma_lulcfilt_demfilt.csv
+#Clip to glacier polygons
 #clipsrc=/Volumes/d/hma/rgi/rgi_hma_aea_110kmbuffer_wgs84.shp
 #vrt=GLAH14_tllz_hma_lulcfilt_demfilt.vrt
 #ogr2ogr -progress -overwrite -clipsrc $clipsrc ${vrt%.*}_clip.shp $vrt
@@ -39,9 +49,11 @@ import dem_mask
 def getparser():
     parser = argparse.ArgumentParser(description="Process and filter ICESat GLAS points")
     parser.add_argument('fn', type=str, help='GLAH14 HDF5 filename')
-    parser.add_argument('-extent', type=str, default=None, help='Output spatial extent')
-    parser.add_argument('-name', type=str, default=None, help='Output file prefix')
-    parser.add_argument('-dem_fn', type=str, default=None, help='Output file prefix')
+    site_choices = geolib.site_dict.keys()
+    parser.add_argument('sitename', type=str, choices=site_choices, help='Site name')
+    #parser.add_argument('--rockfilter', action='store_true', help='Only output points over exposed rock using NLCD or bareground')
+    parser.add_argument('-extent', type=str, default=None, help='Specify output spatial extent ("xmin xmax ymin ymax"). Otherwise, use default specified for sitename in pygeotools/lib/geolib')
+    parser.add_argument('-refdem_fn', type=str, default=None, help='Specify alternative reference DEM for filtering. Otherwise use NED or SRTM')
     return parser
 
 def main():
@@ -49,43 +61,22 @@ def main():
     args = parser.parse_args()
 
     fn = args.fn
-
-    #Need better args handling, for now, these are hardcoded below
-    """
+    sitename = args.sitename
+    #User-specified output extent
+    #Note: not checked, untested
     if args.extent is not None:
         extent = (args.extent).split()
-    if args.name is not None:
-        name = args.name
-    if args.dem_fn is not None:
-        dem_fn = args.dem_fn
-    """
-
+    else:
+        extent = (geolib.site_dict[sitename]).extent
+    if args.refdem_fn is not None:
+        refdem_fn = args.refdem_fn
+    else:
+        refdem_fn = (geolib.site_dict[sitename]).refdem_fn
+    
     #Max elevation difference between shot and sampled DEM
     max_z_DEM_diff = 200
     #Max elevation std for sampled DEM values in padded window around shot
     max_DEMhiresArElv_std = 50.0
-
-    #name = 'hma'
-    name = 'conus'
-
-    if name == 'conus':
-        #CONUS
-        #xmin, xmax, ymin, ymax
-        extent = (-125, -104, 31, 50)
-        #NED 1/3 arcsec (10 m)
-        dem_fn = '/nobackup/deshean/rpcdem/ned13/ned13_tiles_glac24k_115kmbuff.vrt'
-        #NED 1 arcsec (30 m)
-        #dem_fn = '/nobackup/deshean/rpcdem/ned1/ned1_tiles_glac24k_115kmbuff.vrt'
-        #LULC
-        lulc_fn = dem_mask.get_nlcd_fn()
-    elif name == 'hma':
-        #HMA
-        extent = (66, 106, 25, 47)
-        #SRTM-GL1 1 arcsec (30-m)
-        dem_fn = '/nobackup/deshean/rpcdem/hma/srtm1/hma_srtm_gl1.vrt'
-        lulc_fn = dem_mask.get_bareground_fn()
-    else:
-        sys.exit("Other sites not supported at this time")
 
     f = h5py.File(fn)
     t = f.get('Data_40HZ/Time/d_UTCTime_40')[:]
@@ -97,8 +88,10 @@ def main():
     offset_s = 946728000.0
     t += offset_s
     dt = timelib.np_utc2dt(t)
-    dto = timelib.dt2o(dt)
+    dt_o = timelib.dt2o(dt)
     #dts = timelib.np_print_dt(dt)
+    #dt_decyear = timelib.np_dt2decyear(dt)
+    dt_int = np.array([ts.strftime('%Y%m%d') for ts in dt], dtype=long)
 
     lat = np.ma.masked_equal(f.get('Data_40HZ/Geolocation/d_lat')[:], 1.7976931348623157e+308)
     lon = np.ma.masked_equal(f.get('Data_40HZ/Geolocation/d_lon')[:], 1.7976931348623157e+308)
@@ -114,23 +107,33 @@ def main():
     #This is True if point is within extent
     valid_idx = ((x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax))
 
-    out = np.ma.vstack([dto, lat, lon, z]).T
-    #These is a single mask, where True, all input variables are valid
+    #Prepare output array
+    #out = np.ma.vstack([dt_decyear, dt_o, dt_int, lat, lon, z]).T
+    out = np.ma.vstack([dt_o, dt_int, lat, lon, z]).T
+    #Create a mask to ensure all four values are valid for each point
     mask = ~(np.any(np.ma.getmaskarray(out), axis=1))
     mask *= valid_idx
     out = out[mask]
     valid_idx = ~(np.any(np.ma.getmaskarray(out), axis=1))
+
+    #Lon and lat indices
+    xcol = 3
+    ycol = 2
+    zcol = 4
 
     if out.shape[0] == 0:
         sys.exit("No points within specified extent\n")
     else:
         print("Spatial filter: %i" % out.shape[0])
 
-    dto = out[:,0]
-    x = out[:,1]
-    y = out[:,2]
-    z = out[:,3]
+    #out_fmt = ['%0.8f', '%0.8f', '%i', '%0.6f', '%0.6f', '%0.2f'] 
+    #out_hdr = ['dt_decyear, dt_ordinal', 'dt_YYYYMMDD', 'lat', 'lon', 'z_WGS84']
+    out_fmt = ['%0.8f', '%i', '%0.6f', '%0.6f', '%0.2f'] 
+    out_hdr = ['dt_ordinal', 'dt_YYYYMMDD', 'lat', 'lon', 'z_WGS84']
 
+    """
+    ICESat-1 filters
+    """
     #Saturation Correction Flag
     #These are 0 to 5, not_saturated inconsequential applicable not_computed not_applicable
     sat_corr_flg = f.get('Data_40HZ/Quality/sat_corr_flg')[mask]
@@ -140,19 +143,19 @@ def main():
     #Notes suggest this might not be desirable over land
     satElevCorr = np.ma.masked_equal(f.get('Data_40HZ/Elevation_Corrections/d_satElevCorr')[mask], 1.7976931348623157e+308)
     #z[sat_corr_flg < 3] += satElevCorr.filled(0.0)[sat_corr_flg < 3]
-    z += satElevCorr.filled(0.0)
+    out[:,zcol] += satElevCorr.filled(0.0)
 
     #Correction to elevation based on post flight analysis for biases determined for each campaign
     ElevBiasCorr = np.ma.masked_equal(f.get('Data_40HZ/Elevation_Corrections/d_ElevBiasCorr')[mask], 1.7976931348623157e+308)
-    z += ElevBiasCorr.filled(0.0)
+    out[:,zcol] += ElevBiasCorr.filled(0.0)
 
     #Surface elevation (T/P ellipsoid) minus surface elevation (WGS84 ellipsoid).
     #Approximately 0.7 m, so WGS is lower; need to subtract from d_elev
     deltaEllip = np.ma.masked_equal(f.get('Data_40HZ/Geophysical/d_deltaEllip')[mask], 1.7976931348623157e+308)
-    z -= deltaEllip
+    out[:,zcol] -= deltaEllip
 
     #These are 1 for valid, 0 for invalid
-    valid_idx *= ~(np.ma.getmaskarray(z))
+    valid_idx *= ~(np.ma.getmaskarray(out[:,zcol]))
     print("z corrections: %i" % valid_idx.nonzero()[0].size)
 
     if False:
@@ -194,7 +197,7 @@ def main():
     if False:
         #This is elevation extracted from SRTM30
         DEM_elv = np.ma.masked_equal(f.get('Data_40HZ/Geophysical/d_DEM_elv')[mask], 1.7976931348623157e+308)
-        z_DEM_diff = np.abs(z - DEM_elv)
+        z_DEM_diff = np.abs(out[:,zcol] - DEM_elv)
         valid_idx *= (z_DEM_diff < max_z_DEM_diff).data
         print("z_DEM_diff: %i" % valid_idx.nonzero()[0].size)
 
@@ -205,60 +208,92 @@ def main():
         print("max_DEMhiresArElv_std: %i" % valid_idx.nonzero()[0].size)
         #Compute slope
 
-    #out = np.ma.array(out, mask=~(valid_idx))
-    #valid_idx = ~(np.any(np.ma.getmaskarray(out), axis=1))
+    #Apply cumulative filter to output
+    out = out[valid_idx]
 
-    if False:
-        lulc_ds = gdal.Open(lulc_fn)
+    out_fn = os.path.splitext(fn)[0]+'_%s.csv' % sitename
+    print("Writing out %i records to: %s\n" % (out.shape[0], out_fn))
+    out_fmt_str = ', '.join(out_fmt)
+    out_hdr_str = ', '.join(out_hdr)
+    np.savetxt(out_fn, out, fmt=out_fmt_str, delimiter=',', header=out_hdr_str)
+    iolib.writevrt(out_fn, x='lon', y='lat')
+
+    #Extract our own DEM values - should be better than default GLAS reference DEM stats
+    if True:
+        print("Loading reference DEM: %s" % refdem_fn)
+        dem_ds = gdal.Open(refdem_fn)
+        print("Converting coords for DEM")
+        dem_mX, dem_mY = geolib.ds_cT(dem_ds, out[:,xcol], out[:,ycol], geolib.wgs_srs)
+        print("Sampling")
+        dem_samp = geolib.sample(dem_ds, dem_mX, dem_mY, pad='glas')
+        abs_dem_z_diff = np.abs(out[:,zcol] - dem_samp[:,0])
+
+        valid_idx *= ~(np.ma.getmaskarray(abs_dem_z_diff))
+        print("Valid DEM extract: %i" % valid_idx.nonzero()[0].size)
+        valid_idx *= (abs_dem_z_diff < max_z_DEM_diff).data
+        print("Valid abs DEM diff: %i" % valid_idx.nonzero()[0].size)
+        valid_idx *= (dem_samp[:,1] < max_DEMhiresArElv_std).data
+        print("Valid DEM mad: %i" % valid_idx.nonzero()[0].size)
+
+        if valid_idx.nonzero()[0].size == 0:
+            sys.exit("No valid points remain")
+
+        out = np.ma.hstack([out, dem_samp])
+        out_fmt.extend(['%0.2f', '%0.2f'])
+        out_hdr.extend(['z_refdem_med_WGS84', 'z_refdem_nmad'])
+
+        #Apply cumulative filter to output
+        out = out[valid_idx]
+
+        out_fn = os.path.splitext(out_fn)[0]+'_refdemfilt.csv'
+        print("Writing out %i records to: %s\n" % (out.shape[0], out_fn))
+        out_fmt_str = ', '.join(out_fmt)
+        out_hdr_str = ', '.join(out_hdr)
+        np.savetxt(out_fn, out, fmt=out_fmt_str, delimiter=',', header=out_hdr_str)
+        iolib.writevrt(out_fn, x='lon', y='lat')
+
+    #This will sample land-use/land-cover or percent bareground products
+    #Can be used to isolate points over exposed rock
+    #if args.rockfilter: 
+    if True:
+        #This should automatically identify appropriate LULC source based on refdem extent
+        lulc_source = dem_mask.get_lulc_source(dem_ds)
+        #Looks like NED extends beyond NCLD, force use NLCD for conus
+        #if sitename == 'conus':
+        #    lulc_source = 'nlcd'
+        lulc_ds = dem_mask.get_lulc_ds_full(dem_ds, lulc_source)
         print("Converting coords for LULC")
-        lulc_mX, lulc_mY = geolib.ds_cT(lulc_ds, out[:,2], out[:,1], geolib.wgs_srs)
-        print("Sampling LULC")
+        lulc_mX, lulc_mY = geolib.ds_cT(lulc_ds, out[:,xcol], out[:,ycol], geolib.wgs_srs)
+        print("Sampling LULC: %s" % lulc_source)
+        #Note: want to make sure we're not interpolating integer values for NLCD
+        #Should be safe with pad=0, even with pad>0, should take median, not mean
         lulc_samp = geolib.sample(lulc_ds, lulc_mX, lulc_mY, pad=0)
         l = lulc_samp[:,0].data
-        if 'nlcd' in lulc_fn:
-            #l = l[:,np.newaxis]
+        if lulc_source == 'nlcd':
             #This passes rock and ice pixels
-            valid_idx *= np.logical_or((l==31),(l==12))
-        else:
+            valid_idx = np.logical_or((l==31),(l==12))
+        elif lulc_source == 'bareground':
+            #This preserves pixels with bareground percentation >85%
             minperc = 85
-            valid_idx *= (l >= minperc)
+            valid_idx = (l >= minperc)
+        else:
+            print("Unknown LULC source")
         print("LULC: %i" % valid_idx.nonzero()[0].size)
         if l.ndim == 1:
             l = l[:,np.newaxis]
+        out = np.ma.hstack([out, l])
+        out_fmt.append('%i')
+        out_hdr.append('lulc')
 
+        #Apply cumulative filter to output
+        out = out[valid_idx]
 
-    #Extract our own DEM values
-    dem_ds = gdal.Open(dem_fn)
-    print("Converting coords for DEM")
-    dem_mX, dem_mY = geolib.ds_cT(dem_ds, out[:,2], out[:,1], geolib.wgs_srs)
-    print("Sampling DEM")
-    dem_samp = geolib.sample(dem_ds, dem_mX, dem_mY, pad='glas')
-    abs_dem_z_diff = np.abs(out[:,3] - dem_samp[:,0])
-
-    valid_idx *= ~(np.ma.getmaskarray(abs_dem_z_diff))
-    print("Valid DEM extract: %i" % valid_idx.nonzero()[0].size)
-    valid_idx *= (abs_dem_z_diff < max_z_DEM_diff).data
-    print("Valid abs DEM diff: %i" % valid_idx.nonzero()[0].size)
-    valid_idx *= (dem_samp[:,1] < max_DEMhiresArElv_std).data
-    print("Valid DEM mad: %i" % valid_idx.nonzero()[0].size)
-
-    if valid_idx.nonzero()[0].size == 0:
-        sys.exit("No valid points remain")
-
-    print("Writing out\n")
-    dt_dyear = timelib.np_dt2decyear(timelib.o2dt(out[:,0]))[:,np.newaxis]
-    if False:
-        out = np.ma.hstack([dt_dyear, out, dem_samp, l])
-        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
-    else:
-        out = np.ma.hstack([dt_dyear, out, dem_samp])
-        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
-    out = out[valid_idx]
-    #out_fn = os.path.splitext(fn)[0]+'_tllz_%s_lulcfilt_demfilt.csv' % name
-    out_fn = os.path.splitext(fn)[0]+'_tllz_%s_demfilt.csv' % name
-    #header = 't,lat,lon,elev'
-    np.savetxt(out_fn, out, fmt=fmt, delimiter=',')
-    iolib.writevrt(out_fn, x='field_4', y='field_3')
+        out_fn = os.path.splitext(out_fn)[0]+'_lulcfilt.csv'
+        print("Writing out %i records to: %s\n" % (out.shape[0], out_fn))
+        out_fmt_str = ', '.join(out_fmt)
+        out_hdr_str = ', '.join(out_hdr)
+        np.savetxt(out_fn, out, fmt=out_fmt_str, delimiter=',', header=out_hdr_str)
+        iolib.writevrt(out_fn, x='lon', y='lat')
 
 if __name__ == "__main__":
     main()
