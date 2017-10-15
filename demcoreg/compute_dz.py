@@ -48,7 +48,7 @@ def main():
 
     outdir = args.outdir
     if outdir is None:
-        outdir = os.path.split(dem1_fn)[0]
+        outdir = os.path.dirname(os.path.abspath(dem1_fn))
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
