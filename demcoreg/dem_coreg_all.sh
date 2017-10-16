@@ -36,21 +36,9 @@ clean=true
 #Default is for all WV/GE/QB subdir
 list_dir=$(ls -Sr *00/dem*/*-DEM_32m.tif | awk -F'/' '{print $1}')
 list_32m=$(ls -Sr *00/dem*/*-DEM_32m.tif)
+#list_2m=$(ls -Sr *00/dem*/*-DEM_2m.tif)
 list_2m=$(echo $list_32m | sed 's/-DEM_32m.tif/-DEM_2m.tif/g')
 list_32m_done=$(ls -Sr *00/dem*/*-DEM_32m_trans.tif)
-
-#Input reference DEM
-#Should be existing 2-m mosaic for entire region
-#/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
-ref=$1
-#If we don't find it, create a reference
-if [ ! -n "$ref" ] ; then 
-    #For larger extents, need to run dem_mosaic_validtiles.py
-    dem_mosaic -o ref_DEM_2m_mos $list_2m
-    ref=ref_DEM_2m_mos-tile-0.tif
-    #Coreg round number
-    n=1
-fi
 
 njobs=10
 
@@ -112,10 +100,31 @@ if $clean ; then
     rm -rv *00/*/*align *00/*/*trans.tif 
 fi
 
+#Input reference DEM
+#Should be existing 2-m mosaic for entire region
+#ref=/nobackup/deshean/rpcdem/lidar/conus_lidar_1m.vrt
+ref=$1
+#If we don't find it, create a reference
+if [ ! -n "$ref" ] ; then 
+    #For larger extents, need to run dem_mosaic_validtiles.py
+    dem_mosaic -o ref_DEM_2m_mos $list_2m
+    ref=ref_DEM_2m_mos-tile-0.tif
+    #Coreg round number
+    n=1
+fi
+
 #Do the co-registration
 #set pc_align_wrapper threads to 2 or 4
 #set pc_align-wrapper max displacement
+
+#Using gridded DEM as reference
 parallel --progress -j $njobs --delay 3 "dem_coreg.sh {} $ref" ::: $list_2m
+
+#Using csv of points as reference
+#list_csv=$(echo $list_2m | sed 's/DEM_2m.tif/DEM_32m_GLAH14_conus_refdemfilt_ref.csv/g')
+#parallel --link --progress -j $njobs --delay 3 "dem_coreg.sh {1} {2}" ::: $list_2m ::: $list_csv
+#This should work for parallel command substitution, but not
+##parallel --plus --progress -j $njobs --delay 3 "dem_coreg.sh {} {/DEM_2m.tif/DEM_32m_GLAH14_conus_refdemfilt_ref.csv}" ::: $list_2m
 
 #Now create new weighted average mosaics, burn into reference DEM, and rerun the co-registration
 #Should use make_mos.sh - need to specify that we want to use -DEM_2m_trans.tif
