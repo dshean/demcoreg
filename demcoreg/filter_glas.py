@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 
-#Can be run for a single DEM fn or a list of DEM fn
+#Filter preprocessed ICESat-1 GLAS points for a given input raster
+
+#First run glas_proc.py - see usage
+#Also expects *DEM_32m_ref.tif output from dem_mask.py
+
+#Then run filter_glas.py for a single DEM fn or a list of DEM fn
 #parallel --jobs 16 --delay 1 '~/src/demcoreg/demcoreg/filter_glas.py {}' ::: */dem*/*DEM_32m.tif
 
 import sys
@@ -8,21 +13,26 @@ import os
 
 import numpy as np
 from osgeo import gdal
-from pygeotools.lib import geolib, iolib, malib
+from pygeotools.lib import geolib, iolib, malib, timelib
 
 import matplotlib.pyplot as plt
 
 from imview.lib import gmtColormap, pltlib
 cpt_rainbow = gmtColormap.get_rainbow()
 
-min_pts = 100
 site = 'conus'
-#glas_npz_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_%s_lulcfilt_demfilt.npz' % site
-glas_npz_fn = '/nobackupp8/deshean/icesat_glas/GLAH14_tllz_%s_demfilt.npz' % site
+
+min_pts = 100
+
+glas_dir = '/nobackupp8/deshean/icesat_glas'
+#ext = 'GLAH14_%s_refdemfilt_lulcfilt' % site
+ext = 'GLAH14_%s_refdemfilt' % site
+glas_npz_fn = os.path.join(glas_dir, ext+'.npz')
+
 if not os.path.exists(glas_npz_fn):
     glas_csv_fn = os.path.splitext(glas_npz_fn)[0]+'.csv'
     print("Loading csv: %s" % glas_csv_fn)
-    glas_pts = np.loadtxt(glas_csv_fn, delimiter=',')
+    glas_pts = np.loadtxt(glas_csv_fn, delimiter=',', skiprows=1, dtype=None)
     print("Saving npz: %s" % glas_npz_fn)
     np.savez_compressed(glas_npz_fn, glas_pts)
 else:
@@ -31,6 +41,11 @@ else:
     glas_pts = np.load(glas_npz_fn)['arr_0']
 
 pt_srs = geolib.wgs_srs
+#This is time column in YYYYMMDD
+tcol = 0
+xcol = 3
+ycol = 2
+zcol = 4
 
 dem_fn_list = sys.argv[1:]
 for n,dem_fn in enumerate(dem_fn_list):
@@ -42,12 +57,32 @@ for n,dem_fn in enumerate(dem_fn_list):
     dem_extent_wgs84 = geolib.ds_extent(dem_ds, t_srs=pt_srs)
     xmin, ymin, xmax, ymax = dem_extent_wgs84
     print("Applying spatial filter") 
-    x = glas_pts[:,3]
-    y = glas_pts[:,2]
+    x = glas_pts[:,xcol]
+    y = glas_pts[:,ycol]
     idx = ((x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax)) 
     if idx.nonzero()[0].size == 0:
         print("No points after spatial filter")
         continue
+
+    print("Sampling DEM at masked point locations") 
+    glas_pts_fltr = glas_pts[idx]
+
+    print("Writing out %i points after spatial filter" % glas_pts_fltr.shape[0]) 
+    out_csv_fn = os.path.splitext(dem_fn)[0]+'_%s.csv' % ext
+
+    # dt_ordinal, dt_YYYYMMDD, lat, lon, z_WGS84 
+    fmt = '%0.8f, %i, %0.6f, %0.6f, %0.2f'
+    if glas_pts_fltr.shape[1] == 7:
+        # dt_ordinal, dt_YYYYMMDD, lat, lon, z_WGS84, z_refdem_med_WGS84, z_refdem_nmad
+        fmt += ', %0.2f, %0.2f'
+    elif glas_pts_fltr.shape[1] == 8:
+        # dt_ordinal, dt_YYYYMMDD, lat, lon, z_WGS84, z_refdem_med_WGS84, z_refdem_nmad, lulc
+        fmt += ', %0.2f, %0.2f, %i'
+    np.savetxt(out_csv_fn, glas_pts_fltr, fmt=fmt, delimiter=',')
+
+    x_fltr = glas_pts_fltr[:,xcol]
+    y_fltr = glas_pts_fltr[:,ycol]
+    z_fltr = glas_pts_fltr[:,zcol]
 
     dem_mask_fn = os.path.splitext(dem_fn)[0]+'_ref.tif'
     if os.path.exists(dem_mask_fn):
@@ -58,22 +93,6 @@ for n,dem_fn in enumerate(dem_fn_list):
         dem_mask_ds = dem_ds
         dem_mask = dem_ma
 
-    print("Sampling DEM at masked point locations") 
-    glas_pts_fltr = glas_pts[idx]
-
-    print("Writing out %i points after spatial filter" % glas_pts_fltr.shape[0]) 
-    out_csv_fn = os.path.splitext(dem_fn)[0]+'_glas.csv'
-    if glas_pts_fltr.shape[1] == 8:
-        #This is format for LULC/bareground in last column
-        #Some older versions of the regional points have this format
-        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
-    else:
-        fmt = '%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f'
-    np.savetxt(out_csv_fn, glas_pts_fltr, fmt=fmt, delimiter=',')
-
-    x_fltr = glas_pts_fltr[:,3]
-    y_fltr = glas_pts_fltr[:,2]
-    z_fltr = glas_pts_fltr[:,4]
     mX_fltr, mY_fltr, mZ = geolib.cT_helper(x_fltr, y_fltr, 0, pt_srs, geolib.get_ds_srs(dem_mask_ds))
     pX_fltr, pY_fltr = geolib.mapToPixel(mX_fltr, mY_fltr, dem_mask_ds.GetGeoTransform())
     pX_fltr = np.atleast_1d(pX_fltr)
@@ -87,15 +106,15 @@ for n,dem_fn in enumerate(dem_fn_list):
         
     glas_pts_fltr_mask = glas_pts_fltr[samp_idx]
 
-    print("Writing out %i points after mask" % glas_pts_fltr_mask.shape[0]) 
-    out_csv_fn = os.path.splitext(dem_fn)[0]+'_glas_ref.csv'
-    #Could add DEM samp columns here
-    #fmt='%0.8f, %0.10f, %0.6f, %0.6f, %0.2f, %0.2f, %0.2f, %i'
-    np.savetxt(out_csv_fn, glas_pts_fltr_mask, fmt=fmt, delimiter=',')
+    if os.path.exists(dem_mask_fn):
+        print("Writing out %i points after mask" % glas_pts_fltr_mask.shape[0]) 
+        out_csv_fn_mask = os.path.splitext(out_csv_fn)[0]+'_ref.csv'
+        #Could add DEM samp columns here
+        np.savetxt(out_csv_fn_mask, glas_pts_fltr_mask, fmt=fmt, delimiter=',')
 
-    x_fltr_mask = glas_pts_fltr_mask[:,3]
-    y_fltr_mask = glas_pts_fltr_mask[:,2]
-    z_fltr_mask = glas_pts_fltr_mask[:,4]
+    x_fltr_mask = glas_pts_fltr_mask[:,xcol]
+    y_fltr_mask = glas_pts_fltr_mask[:,ycol]
+    z_fltr_mask = glas_pts_fltr_mask[:,zcol]
     mX_fltr_mask, mY_fltr_mask, mZ = geolib.cT_helper(x_fltr_mask, y_fltr_mask, 0, pt_srs, geolib.get_ds_srs(dem_mask_ds))
     pX_fltr_mask, pY_fltr_mask = geolib.mapToPixel(mX_fltr_mask, mY_fltr_mask, dem_mask_ds.GetGeoTransform())
     pX_fltr_mask = np.atleast_1d(pX_fltr_mask)
@@ -126,11 +145,15 @@ for n,dem_fn in enumerate(dem_fn_list):
         cbar = pltlib.add_cbar(ax2, sc2, label='Pt Elev. (m WGS84)')
 
         #Plot time
-        c = glas_pts_fltr[:,0]
+        c = glas_pts_fltr[:,tcol]
+        c_decyear = timelib.np_dt2decyear(timelib.np_o2dt(c))
+        c = c_decyear
         #vmin = c.min()
         #vmax = c.max()
         vmin = 2003.14085699
         vmax = 2009.77587047
+        #vmin = 20030220
+        #vmax = 20091011
         im3 = ax3.imshow(hs_ma, cmap='gray', clim=hs_clim, alpha=0.5)
         sc3 = ax3.scatter(pX_fltr, pY_fltr, s=1, c=c, vmin=vmin, vmax=vmax, edgecolors='none')
         #cbar = pltlib.add_cbar(ax3, sc3, label='Pt Year', cbar_kwargs={'format':'%0.2f'})
@@ -156,7 +179,7 @@ for n,dem_fn in enumerate(dem_fn_list):
         fig.tight_layout()
         #This adjusts subplots to fit suptitle
         plt.subplots_adjust(top=0.92)
-        print "Saving figure"
-        fig_fn = os.path.splitext(dem_fn)[0]+'_glas.png'
+        fig_fn = os.path.splitext(out_csv_fn)[0]+'.png'
+        print "Saving figure: %s" % fig_fn
         plt.savefig(fig_fn, dpi=300, bbox_inches='tight', pad_inches=0)
         plt.close(fig)
