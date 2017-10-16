@@ -192,12 +192,16 @@ pc_align_opt+=" --outlier-ratio $outlier_ratio"
 #point2dem_opt+='--fsaa'
 
 #Script for sampling points
+#This is now bundled with demcoreg
+sample_script=sample_raster_at_pts.py
+
+#This was older sampling utility, fast, but required compiling
 #This is Pleiades location
-sample_script='/u/deshean/src/Tools/build/point_to_dem_dist'
-if [ ! -x "$sample_script" ] ; then
-    #Assume we're on dido
-    sample_script="/Users/dshean/src/asp_tools/point_to_dem_dist"
-fi
+#sample_script='/u/deshean/src/Tools/build/point_to_dem_dist'
+#if [ ! -x "$sample_script" ] ; then
+#    #Assume we're on dido
+#    sample_script="/Users/dshean/src/asp_tools/point_to_dem_dist"
+#fi
 
 function runcmd () {
     cmd=$1
@@ -221,13 +225,18 @@ function sample () {
     if [ "${ref##*.}" == "csv" ] ; then 
         #Run initial sampling
         echo "Sampling $dem" | tee -a $logfile
-        cmd="$sample_script -o $myout $ref $dem"
+        #Older sampling formats
+        #cmd="$sample_script -o $myout $ref $dem"
+        #sample_fn=${myout}-sample.csv
+        cmd="$sample_script $dem $ref"
+        ref_basename=$(basename $ref)
+        sample_fn=${dem%.*}_${ref_basename%.*}_sample.csv
         runcmd "$cmd" $logfile
-        if [ ! -e ${myout}-sample.csv ] ; then
+        if [ ! -e $sample_fn ] ; then
             echo "No valid overlapping points!" | tee -a $logfile
             exit 1
         else
-            cmd="robust_stats.py ${myout}-sample.csv"    
+            cmd="robust_stats.py -col -1 $sample_fn"    
             runcmd "$cmd" $logfile
         fi
     elif [ "${ref##*.}" == "tif" ] ; then
@@ -271,7 +280,7 @@ dem_orig=$dem
 
 #Note pc_align should append a '-' to the specified outprefix
 #out=pc_align_ref_$(basename ${atm%.*})_src_$(basename ${dem%.*})
-outdir=${dem_orig%.*}_align
+outdir=${dem_orig%.*}_pt_align
 if [ "$ref_type" == "grid" ] ; then
     outdir=${dem_orig%.*}_grid_align
 fi
