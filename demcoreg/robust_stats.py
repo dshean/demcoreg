@@ -8,6 +8,7 @@ import sys
 import argparse
 
 import numpy as np
+from pygeotools.lib import iolib
 
 #This takes in the sampled output from pc_align and computes statistics
 #Compute and print robust statistics for before or after samples (csv or tif) from pc_align_wrapper.sh
@@ -16,6 +17,7 @@ def getparser():
     parser = argparse.ArgumentParser(description="Compute robust stats from dz or pc_align sample.csv")
     parser.add_argument('fn', type=str, help='Input filename')
     parser.add_argument('-outdir', default=None, help='Output directory')
+    parser.add_argument('-col', type=int, default=4, help='Column containing values for stats')
     return parser
 
 def main():
@@ -25,15 +27,18 @@ def main():
     fn = args.fn
     ext = os.path.splitext(fn)[1]
 
+    col = args.col
+
     #This expects the sample.csv, not the errors.csv
     if 'csv' in ext:
-        a = np.loadtxt(fn, delimiter=',', skiprows=1)
+        #a = np.loadtxt(fn, delimiter=',', skiprows=1)
+        #This will more gracefully handle hader
+        a = iolib.readcsv(fn)
         #Signed difference values are in column 5
-        dz_m = a[:,4]
+        dz_m = a[:,col]
         dz_m = dz_m[~np.isnan(dz_m)]
     #If pc_align was run with reference grid, then load the dz raster
     elif 'tif' in ext: 
-        from pygeotools.lib import iolib
         a = iolib.fn_getma(fn)
         dz_m = a.compressed()
     else:
