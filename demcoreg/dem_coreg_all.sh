@@ -10,7 +10,7 @@
 #cd dir
 
 #Clean up all previous runs
-clean=true
+clean=false
 
 #Some earlier r100 xml files lack the necessary tags for toa.  Need to copy original xml files from lfe
 #ssh lfe

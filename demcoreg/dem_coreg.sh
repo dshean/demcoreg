@@ -138,28 +138,15 @@ else
     fi
 fi
 
-#Check if refdem_masked has valid pixels
+#Should check if refdem_masked has valid pixels
 
 if [ -e $refdem_masked ] ; then
-    #point-to-point
+    #Actually run pc_align
+    #Default is point-to-point ICP
     pc_align_wrapper.sh $refdem_masked $dem
 
+    #Now apply the translation to DEMs with different resolution
     if $update ; then
-        cd $demdir
-        if ls -t $outdir/*DEM.tif 1> /dev/null 2>&1 ; then 
-            log=$(ls -t $outdir/*.log | head -1)
-            if grep -q 'Translation vector' $log ; then
-                echo
-                if [ -e ${dembase}-DEM_32m.tif ] ; then 
-                    apply_dem_translation.py ${dembase}-DEM_32m.tif $log
-                fi
-                if [ -e ${dembase}-DEM_8m.tif ] ; then 
-                    apply_dem_translation.py ${dembase}-DEM_8m.tif $log
-                fi
-                if [ -e ${dembase}-DEM_2m.tif ] ; then 
-                    ln -sf $outdir/*DEM.tif ${dembase}-DEM_2m_trans.tif
-                fi
-            fi
-        fi
+        apply_trans_all.sh $demdir
     fi
 fi
