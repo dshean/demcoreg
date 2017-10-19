@@ -76,4 +76,18 @@ echo "Merging region shp for global shp"
 ogr_merge.sh rgi60_merge.shp *_rgi60_*shp
 #fi
 
+site=HMA
+wkt='POLYGON ((66 47, 106 47, 106 25, 66 25, 66 47))'
+if [ ! -e rgi60_merge_${site}.shp ] ; then 
+    echo "Clipping to site: $site"
+    ogr2ogr -progress -overwrite -clipsrc "$wkt" rgi60_merge_${site}.shp rgi60_merge.shp
+fi
+
+site=CONUS
+wkt='POLYGON ((-125 49, -104 49, -104 32, -125 32, -125 49))'
+if [ ! -e rgi60_merge_${site}.shp ] ; then 
+    echo "Clipping to site: $site"
+    ogr2ogr -progress -overwrite -clipsrc "$wkt" rgi60_merge_${site}.shp rgi60_merge.shp
+fi
+
 echo $rgi_fn/regions/rgi60_merge.shp
