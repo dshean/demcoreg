@@ -155,7 +155,7 @@ def mask_nlcd(ds, valid='rock+ice+water', datadir=None, mask_glaciers=True, out_
             mask *= icemask
     return mask
 
-def mask_bareground(ds, minperc=80, mask_glaciers=True, out_fn=None):
+def mask_bareground(ds, minperc=60, mask_glaciers=True, out_fn=None):
     """Generate raster mask for exposed bare ground from global bareground data
     """
     print("Loading bareground")
@@ -219,7 +219,7 @@ def get_lulc_ds_warp(ds, lulc_source=None):
     return lulc_ds_warp
 
 #Generate a rockmask
-def get_lulc_mask(ds, lulc_source=None, mask_glaciers=True, filter='rock+ice+water', bareground_thresh=80, out_fn=None):
+def get_lulc_mask(ds, lulc_source=None, mask_glaciers=True, filter='rock+ice+water', bareground_thresh=60, out_fn=None):
     if lulc_source is None:
         lulc_source = get_lulc_source(ds)
     if out_fn is not None:
@@ -440,7 +440,7 @@ def getparser():
     parser.add_argument('--snodas_thresh', type=float, default=0.2, help='SNODAS snow depth threshold (default: %(default)s m), mask values greater than this value')
     parser.add_argument('--modscag', action='store_true', help='Use MODSCAG fractional snow cover products')
     parser.add_argument('--modscag_thresh', type=float, default=50, help='MODSCAG fractional snow cover percent threshold (default: %(default)s%%, valid range 0-100), mask greater than this value')
-    parser.add_argument('--bareground_thresh', type=float, default=80, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
+    parser.add_argument('--bareground_thresh', type=float, default=60, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
     parser.add_argument('--no_icemask', action='store_true', help="Don't mask glacier polygons")
     parser.add_argument('--filter', type=str, default='rock+ice+water', choices=filter_choices, help='Preserve these LULC pixels (default: %(default)s)') 
     parser.add_argument('--dilate', type=int, default=None, help='Dilate mask with this many iterations (default: %(default)s)')
