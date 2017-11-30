@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from imview.lib import gmtColormap, pltlib
 cpt_rainbow = gmtColormap.get_rainbow()
 
-site = 'conus'
+site = 'hma'
 
 min_pts = 100
 
@@ -100,8 +100,9 @@ for n,dem_fn in enumerate(dem_fn_list):
     #This returns median and mad
     samp = geolib.sample(dem_mask_ds, mX_fltr, mY_fltr, pad=1)
     samp_idx = ~(np.ma.getmaskarray(samp[:,0]))
-    if samp_idx.nonzero()[0].size == 0:
-        print("No points after mask")
+    npts = samp_idx.nonzero()[0].size
+    if npts < min_pts:
+        print("Not enough points after mask (%i < %i)" % (npts, min_pts))
         continue
         
     glas_pts_fltr_mask = glas_pts_fltr[samp_idx]
