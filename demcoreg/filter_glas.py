@@ -22,7 +22,23 @@ cpt_rainbow = gmtColormap.get_rainbow()
 
 site = 'hma'
 
+#Minimum number of points required to write out _ref.csv
 min_pts = 100
+
+#Maximum value of surface slope to use
+max_slope = 20.
+
+pt_srs = geolib.wgs_srs
+#This is time column in YYYYMMDD
+tcol = 0
+xcol = 3
+ycol = 2
+zcol = 4
+
+#Padding in pixels for sample radius
+#Since we're likely dealing with 32-m products here, can just use pad=1
+pad = 1
+#pad = 'glas'
 
 glas_dir = '/nobackupp8/deshean/icesat_glas'
 #ext = 'GLAH14_%s_refdemfilt_lulcfilt' % site
@@ -39,13 +55,6 @@ else:
     #This takes ~5 seconds to load ~9M records with 8 fields
     print("Loading npz: %s" % glas_npz_fn)
     glas_pts = np.load(glas_npz_fn)['arr_0']
-
-pt_srs = geolib.wgs_srs
-#This is time column in YYYYMMDD
-tcol = 0
-xcol = 3
-ycol = 2
-zcol = 4
 
 dem_fn_list = sys.argv[1:]
 for n,dem_fn in enumerate(dem_fn_list):
@@ -93,18 +102,33 @@ for n,dem_fn in enumerate(dem_fn_list):
         dem_mask_ds = dem_ds
         dem_mask = dem_ma
 
+    #Convert input xy coordinates to raster coordinates
     mX_fltr, mY_fltr, mZ = geolib.cT_helper(x_fltr, y_fltr, 0, pt_srs, geolib.get_ds_srs(dem_mask_ds))
     pX_fltr, pY_fltr = geolib.mapToPixel(mX_fltr, mY_fltr, dem_mask_ds.GetGeoTransform())
     pX_fltr = np.atleast_1d(pX_fltr)
     pY_fltr = np.atleast_1d(pY_fltr)
-    #This returns median and mad
-    samp = geolib.sample(dem_mask_ds, mX_fltr, mY_fltr, pad=1)
+
+    #Sample raster
+    #This returns median and mad for ICESat footprint
+    samp = geolib.sample(dem_mask_ds, mX_fltr, mY_fltr, pad=pad)
     samp_idx = ~(np.ma.getmaskarray(samp[:,0]))
     npts = samp_idx.nonzero()[0].size
     if npts < min_pts:
-        print("Not enough points after mask (%i < %i)" % (npts, min_pts))
+        print("Not enough points after sampling valud pixels, post bareground mask (%i < %i)" % (npts, min_pts))
         continue
-        
+       
+    if True:
+        print("Applying slope filter, masking points with slope > %0.1f" % max_slope)
+        slope_ds = geolib.gdaldem_mem_ds(dem_mask_ds, processing='slope', returnma=False)
+        slope_samp = geolib.sample(slope_ds, mX_fltr, mY_fltr, pad=pad)
+        slope_samp_idx = (slope_samp[:,0] <= max_slope).data
+        samp_idx = np.logical_and(slope_samp_idx, samp_idx)
+
+    npts = samp_idx.nonzero()[0].size
+    if npts < min_pts:
+        print("Not enough points after %0.1f deg slope mask (%i < %i)" % (max_slope, npts, min_pts))
+        continue
+
     glas_pts_fltr_mask = glas_pts_fltr[samp_idx]
 
     if os.path.exists(dem_mask_fn):
