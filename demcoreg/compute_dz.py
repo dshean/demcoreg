@@ -12,10 +12,7 @@ from datetime import timedelta
 
 import numpy as np
 
-from pygeotools.lib import timelib 
-from pygeotools.lib import iolib
-from pygeotools.lib import malib
-from pygeotools.lib import warplib
+from pygeotools.lib import timelib, iolib, malib, warplib
 
 def getparser():
     parser = argparse.ArgumentParser(description="Compute difference between two rasters")
@@ -59,16 +56,17 @@ def main():
     dem1 = iolib.ds_getma(dem1_ds, 1)
     dem2 = iolib.ds_getma(dem2_ds, 1)
 
-    #Extract basename
-    adj = ''
-    if '-adj' in dem1_fn:
-        adj = '-adj' 
-    dem1_fn_base = re.sub(adj, '', os.path.splitext(dem1_fn)[0]) 
-    dem2_fn_base = re.sub(adj, '', os.path.splitext(dem2_fn)[0]) 
-
     #Compute dz/dt rates if possible, in m/yr
     rates = True 
     if rates:
+        #Extract basename
+        #This was a hack to work with timestamp array filenames that have geoid offset applied
+        adj = ''
+        if '-adj' in dem1_fn:
+            adj = '-adj' 
+        dem1_fn_base = re.sub(adj, '', os.path.splitext(dem1_fn)[0]) 
+        dem2_fn_base = re.sub(adj, '', os.path.splitext(dem2_fn)[0]) 
+
         #Attempt to load timestamp arrays (for mosaics) if present
         t1_fn = dem1_fn_base+'_ts.tif'
         t2_fn = dem2_fn_base+'_ts.tif'
@@ -94,18 +92,14 @@ def main():
                 print("Unable to extract timestamps for input images")
                 rates = False
 
-    #Check to make sure inputs actually intersect
-    #Masked pixels are True
-    if not np.any(~dem1.mask*~dem2.mask):
-        sys.exit("No valid overlap between input data")
-
-    #Compute common mask
-    print("Generating common mask")
-    common_mask = malib.common_mask([dem1, dem2])
-
     #Compute relative elevation difference with Eulerian approach 
     print("Computing eulerian elevation difference")
-    diff_euler = np.ma.array(dem2-dem1, mask=common_mask)
+    diff_euler = dem2 - dem1
+
+    #Check to make sure inputs actually intersect
+    #if not np.any(~dem1.mask*~dem2.mask):
+    if diff_euler.count() == 0:
+        sys.exit("No valid overlap between input DEMs")
 
     if True:
         print("Eulerian elevation difference stats:")
