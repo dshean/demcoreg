@@ -27,10 +27,7 @@ import numpy as np
 
 from datetime import datetime, timedelta
 
-from pygeotools.lib import iolib
-from pygeotools.lib import warplib
-from pygeotools.lib import geolib
-from pygeotools.lib import timelib
+from pygeotools.lib import iolib, warplib, geolib, timelib
 
 def get_nlcd_fn(datadir=None):
     """Calls external shell script `get_nlcd.sh` to fetch:
