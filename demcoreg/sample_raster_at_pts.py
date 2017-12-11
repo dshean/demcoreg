@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+"""
+Utility to sample input raster for a set of input xyz points and print statistics
+"""
+
 import sys
 import os
 import csv    
@@ -11,16 +15,17 @@ from pygeotools.lib import geolib, iolib, malib
 r_fn = sys.argv[1]
 pt_fn = sys.argv[2]
 
-#Allow user to specify point_srs, fields
+#In the future, allow user to specify point_srs, fields
+#For now, assume output is from filter_glas.py, coords are lat/lon
+xy_srs = geolib.wgs_srs
+#Field numbers of x y z coordinates
+xcol = 3
+ycol = 2
+zcol = 4
 
 print("Loading points: %s" % pt_fn)
 #This needs to return a header
 pts = iolib.readcsv(pt_fn)
-
-xcol = 3
-ycol = 2
-zcol = 4
-xy_srs = geolib.wgs_srs
 
 #Assume that all of our points are preselected to fall withing raster extent
 #Can add option for spatial filter, see filter_glas.py
