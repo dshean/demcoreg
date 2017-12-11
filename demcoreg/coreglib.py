@@ -170,23 +170,21 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
 
     return m, int_offset, sp_offset, fig
 
-def bin_stats(x, y, nbins=360):
+def bin_stats(x, y, stat='median', nbins=360):
     import scipy.stats
     #bin_range = (x.min(), x.max())
     bin_range = (0., 360.)
     bin_width = (bin_range[1] - bin_range[0]) / nbins
-    print("Computing 1-degree bin statistics: median")
-    #bin_count, bin_edges, bin_number = scipy.stats.binned_statistic(x, y, \
-    #        statistic='count', bins=nbins, range=bin_range)
-    bin_med, bin_edges, bin_number = scipy.stats.binned_statistic(x, y, \
-            statistic='median', bins=nbins, range=bin_range)
+    print("Computing 1-degree bin statistics: %s" % stat)
+    bin_stat, bin_edges, bin_number = scipy.stats.binned_statistic(x, y, \
+            statistic=stat, bins=nbins, range=bin_range)
     bin_centers = bin_edges[:-1] + bin_width/2.
-    bin_med = np.ma.masked_invalid(bin_med)
+    bin_stat = np.ma.masked_invalid(bin_stat)
    
     """
     #Mask bins in grid directions, can potentially contain biased stats
     badbins = [0, 45, 90, 180, 225, 270, 315]
-    bin_med = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_med)
+    bin_stat = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_stat)
     bin_edges = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_edges)
     """
 
@@ -195,7 +193,7 @@ def bin_stats(x, y, nbins=360):
         plt.figure()
         #Need to pull out original values for each bin
         #Loop through unique bin numbers, pull out original values into list of lists
-        #plt.boxplot(bin_med, sym='')
+        #plt.boxplot(bin_stat, sym='')
         plt.xlim(*bin_range)
         plt.xticks(np.arange(bin_range[0],bin_range[1],30))
         plt.ylabel('dh/tan(slope) (m)')
@@ -209,7 +207,7 @@ def bin_stats(x, y, nbins=360):
         plt.xlabel('Aspect (1-deg bins)')
         plt.show()
 
-    return bin_med, bin_edges, bin_centers
+    return bin_stat, bin_edges, bin_centers
 
 #Function for fitting Nuth and Kaab (2011)
 def nuth_func(x, a, b, c):
@@ -275,7 +273,18 @@ def compute_offset_nuth(dh, slope, aspect):
     """
     
     #Compute robust statistics for 1-degree bins
-    bin_med, bin_edges, bin_centers = bin_stats(xdata, ydata)
+    bin_count, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='count')
+    bin_med, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='median')
+
+    #Remove any empty bins
+    #idx = ~(np.ma.getmaskarray(bin_med))
+
+    #Remove any bins with only a few points
+    min_count = 9
+    idx = (bin_count.filled(0) >= min_count) 
+
+    bin_med = bin_med[idx]
+    bin_centers = bin_centers[idx]
 
     fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
     f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 

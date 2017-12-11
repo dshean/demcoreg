@@ -59,7 +59,9 @@ def main(argv=None):
     dem2_gt_orig = np.array(dem2_ds.GetGeoTransform())
 
     #Make sure the input datasets have the same resolution/extent
-    dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], res='max', extent='intersection')
+    #Use projection of source DEM
+    dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
+            res='max', extent='intersection', t_srs=dem2_ds)
 
     #Compute size of NCC and SAD search window in pixels 
     res = float(geolib.get_res(dem1_clip_ds, square=True)[0])
@@ -130,8 +132,6 @@ def main(argv=None):
         dem1_slope = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='slope', returnma=True)
         dem1_aspect = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='aspect', returnma=True)
 
-        #Apply common mask
-
         #Compute relationship between elevation difference, slope and aspect
         fit_param, f_nuth = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect)
 
@@ -186,16 +186,28 @@ def main(argv=None):
     #Write out aligned eulerian difference map
     write_aligndiff = True
     if write_aligndiff:
-        dem1_ds, dem2_ds = warplib.memwarp_multi([dem1_ds, dem2_ds_align], res='max', extent='intersection') 
+        dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds_align], \
+                res='max', extent='intersection', t_srs=dem2_ds_align) 
 
-        dem1 = iolib.ds_getma(dem1_ds, 1)
-        dem2 = iolib.ds_getma(dem2_ds, 1)
+        dem1 = iolib.ds_getma(dem1_clip_ds, 1)
+        dem2 = iolib.ds_getma(dem2_clip_ds, 1)
 
         #Compute elevation difference
         diff_euler_align = dem1 - dem2
-        
+
+        #Recompute the mask
+        if not args.nomask:
+            #Mask glaciers, vegetated slopes
+            #static_mask = ~(dem_mask.get_lulc_mask(dem1_clip_ds, mask_glaciers=True, \
+            #        filter='not_forest+not_water', bareground_thresh=60))
+            #Mask glaciers
+            static_mask = ~(dem_mask.get_icemask(dem1_clip_ds))
+            diff_euler_align_masked = np.ma.array(diff_euler_align, mask=static_mask) 
+        else:
+            diff_euler_align_masked = diff_euler_align
+
         print("Elevation difference stats for aligned inputs")
-        diff_stats_align = malib.print_stats(diff_euler_align)
+        diff_stats_align = malib.print_stats(diff_euler_align_masked)
 
         #Use median for vertical bias removal
         zshift_m = diff_stats_align[5]
@@ -223,6 +235,7 @@ def main(argv=None):
             dem2_hs = geolib.gdaldem_mem_ma(dem2_orig, dem2_clip_ds, returnma=True)
             f,axa = plt.subplots(2, 3, figsize=(11, 8.5))          
             for ax in axa.ravel():
+                ax.set_facecolor('k')
                 pltlib.hide_ticks(ax)
             dem_clim = malib.calcperc(dem1_orig, (2,98))
             axa[0,0].imshow(dem1_hs, cmap='gray')
@@ -237,8 +250,10 @@ def main(argv=None):
             dz_clim = malib.calcperc_sym(diff_euler, (2, 98))
             im = axa[1,0].imshow(-diff_euler, cmap='RdBu', clim=dz_clim)
             axa[1,0].set_title('Elev. Diff. Before')
-            im = axa[1,1].imshow(-diff_euler_align, cmap='RdBu', clim=dz_clim)
+            im = axa[1,1].imshow(-diff_euler_align_masked, cmap='RdBu', clim=dz_clim)
             axa[1,1].set_title('Elev. Diff. After')
+            im = axa[1,2].imshow(-diff_euler_align, cmap='RdBu', clim=dz_clim)
+            axa[1,2].set_title('Elev. Diff. Final')
             #Tried to insert Nuth fig here
             #ax_nuth.change_geometry(1,2,1)
             #f.axes.append(ax_nuth)
@@ -251,7 +266,7 @@ def main(argv=None):
             dst_fn = outprefix + '%s_align.png' % xyz_shift_str
             print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn)
             f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0)
-            plt.show()
+            #plt.show()
 
 if __name__ == "__main__":
     main()
