@@ -278,30 +278,35 @@ def compute_offset_nuth(dh, slope, aspect):
     bin_med, bin_edges, bin_centers = bin_stats(xdata, ydata)
 
     fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
-    genplot(bin_centers, bin_med, fit) 
+    f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
+    plt.show()
     #genplot(xdata, ydata, fit) 
 
     print(fit)
-    return fit
+    return fit, f
 
-def genplot(x, y, fit, maxpts=10000):
+def genplot(x, y, fit, xdata=None, ydata=None, maxpts=10000):
     bin_range = (0, 360)
     a = (np.arange(*bin_range))
     f_a = nuth_func(a, fit[0], fit[1], fit[2])
-    if x.size > maxpts:
+    nuth_func_str = r'$y=%0.2f*cos(%0.2f-x)+%0.2f$' % tuple(fit)
+    if xdata.size > maxpts:
         import random
-        idx = random.sample(list(range(x.size)), 10000)
+        idx = random.sample(list(range(xdata.size)), 10000)
     else:
-        idx = np.arange(x.size)
-    plt.figure()
-    plt.xlabel('Aspect (deg)')
-    plt.ylabel('dh/tan(slope) (m)')
-    plt.plot(x[idx], y[idx], 'r.')
-    plt.xlim(*bin_range)
-    plt.axhline(color='k')
-    plt.plot(a, f_a, 'b')
-    #plt.ylim(-200,200)
-    plt.show()
+        idx = np.arange(xdata.size)
+    f, ax = plt.subplots()
+    ax.set_xlabel('Aspect (deg)')
+    ax.set_ylabel('dh/tan(slope) (m)')
+    ax.plot(xdata[idx], ydata[idx], 'k.', label='Orig pixels')
+    ax.plot(x, y, 'ro', label='Bin median')
+    ax.axhline(color='k')
+    ax.plot(a, f_a, 'b', label=nuth_func_str)
+    ax.set_xlim(*bin_range)
+    pad = 0.2 * np.max([np.abs(y.min()), np.abs(y.max())])
+    ax.set_ylim(y.min() - pad, y.max() + pad)
+    ax.legend(prop={'size':8})
+    return f 
 
 #Function copied from from openPIV pyprocess
 def find_first_peak(corr):

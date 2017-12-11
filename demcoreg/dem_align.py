@@ -6,10 +6,14 @@ import argparse
 
 from osgeo import gdal
 import numpy as np
+import matplotlib.pyplot as plt
 
 from pygeotools.lib import iolib, malib, geolib, warplib
 
 from demcoreg import coreglib, dem_mask
+
+from imview.lib import pltlib, gmtColormap
+cpt_rainbow = gmtColormap.get_rainbow()
 
 def getparser():
     parser = argparse.ArgumentParser(description="Perform DEM co-registration using old algorithms")
@@ -33,9 +37,21 @@ def main(argv=None):
     mode = args.mode
     max_offset_m = args.max_offset
 
+    outdir = args.outdir
+    if outdir is None:
+        outdir = os.path.splitext(dem2_fn)[0] + '_dem_align'
+
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    outprefix = '%s_%s' % (os.path.splitext(os.path.split(dem2_fn)[-1])[0], \
+            os.path.splitext(os.path.split(dem1_fn)[-1])[0]) 
+    outprefix = os.path.join(outdir, outprefix)
+
     print("\nReference: %s" % dem1_fn)
     print("Source: %s" % dem2_fn)
-    print("Mode: %s\n" % mode)
+    print("Mode: %s" % mode)
+    print("Output: %s\n" % outprefix)
 
     dem1_ds = gdal.Open(dem1_fn, gdal.GA_ReadOnly)
     dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
@@ -55,8 +71,8 @@ def main(argv=None):
     dem2_gt = np.array(dem2_clip_ds.GetGeoTransform())
 
     #Load the arrays
-    dem1 = iolib.ds_getma(dem1_clip_ds, 1)
-    dem2 = iolib.ds_getma(dem2_clip_ds, 1)
+    dem1_orig = iolib.ds_getma(dem1_clip_ds, 1)
+    dem2_orig = iolib.ds_getma(dem2_clip_ds, 1)
 
     if not args.nomask:
         #Mask glaciers, vegetated slopes
@@ -64,14 +80,17 @@ def main(argv=None):
         #        filter='not_forest+not_water', bareground_thresh=60))
         #Mask glaciers
         static_mask = ~(dem_mask.get_icemask(dem1_clip_ds))
-        dem1 = np.ma.array(dem1, mask=static_mask)
-        dem2 = np.ma.array(dem2, mask=static_mask)
+        dem1 = np.ma.array(dem1_orig, mask=static_mask)
+        dem2 = np.ma.array(dem2_orig, mask=static_mask)
+    else:
+        dem1 = dem1_orig
+        dem2 = dem2_orig
 
     #Compute difference for unaligned inputs
     print("Elevation difference stats for uncorrected input DEMs")
     #Shouldn't need to worry about common mask here, as both inputs are ma
+    diff_euler = dem1 - dem2
 
-    diff_euler = np.ma.array(dem1 - dem2)
     if diff_euler.count() == 0:
         sys.exit("No valid overlap between input DEMs")
 
@@ -98,8 +117,7 @@ def main(argv=None):
                 pad=pad, prefilter=prefilter, plot=write_nccfig)
 
         if write_nccfig:
-            dst_fn = '%s_%s_nccfig.png' % (os.path.splitext(dem2_fn)[0], \
-                    os.path.splitext(os.path.split(dem1_fn)[1])[0]) 
+            dst_fn = '%s_nccfig.png' % outprefix
             fig.savefig(dst_fn)
 
         xshift_m = sp_offset[1]*dem2_gt[1]
@@ -115,7 +133,7 @@ def main(argv=None):
         #Apply common mask
 
         #Compute relationship between elevation difference, slope and aspect
-        fit_param = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect)
+        fit_param, f_nuth = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect)
 
         #fit_param[0] is magnitude of shift vector
         #fit_param[1] is direction of shift vector
@@ -141,25 +159,28 @@ def main(argv=None):
     #This is a hack to apply the computed median bias correction for shpclip area only
     elif mode == "none":
         print("Skipping alignment, writing out DEM with median bias over static surfaces removed")
-        dst_fn = os.path.splitext(dem2_fn)[0]+'_med%0.2f.tif' % med_bias
+        dst_fn = outprefix+'_med%0.1f.tif' % med_bias
         iolib.writeGTiff(dem2_orig + med_bias, dst_fn, dem2_ds)
         sys.exit()
 
     #Apply the horizontal shift to the original dataset
     dem2_ds_align = coreglib.apply_xy_shift(dem2_ds, xshift_m, yshift_m)
 
+    #String to append to output filenames
+    xy_shift_str = '_%s_x%+0.1f_y%+0.1f' % (mode, xshift_m, yshift_m)
+
     #Write out aligned dataset, but without vertical offset applied
     write_align = False 
     if write_align:
-        align_fn = '%s_align_x%+0.2f_y%+0.2f.tif' % (os.path.splitext(dem2_fn)[0], xshift_m, yshift_m)
-        print("Writing out shifted dem2 (no vertical offset): %s" % align_fn)
-        warplib.writeout(dem2_ds_align, align_fn)
+        dst_fn = outprefix + '%s_align.tif' % (xy_shift_str)
+        print("Writing out shifted dem2 (no vertical offset): %s" % dst_fn)
+        warplib.writeout(dem2_ds_align, dst_fn)
 
     #Write out original eulerian difference map
     write_origdiff = True 
     if write_origdiff:
         print("Writing out original euler difference map for common intersection before alignment")
-        dst_fn = '%s_%s_orig_dz_eul.tif' % (os.path.splitext(dem2_fn)[0], os.path.splitext(os.path.split(dem1_fn)[1])[0]) 
+        dst_fn = outprefix + '_orig_dz_eul.tif' 
         iolib.writeGTiff(diff_euler, dst_fn, dem1_clip_ds)
 
     #Write out aligned eulerian difference map
@@ -178,19 +199,59 @@ def main(argv=None):
 
         #Use median for vertical bias removal
         zshift_m = diff_stats_align[5]
+        xyz_shift_str = xy_shift_str+'_z%+0.1f' % zshift_m
 
         #Write out aligned eulerian difference map for clipped extent with vertial offset removed
-        dst_fn = '%s_%s_align_x%+0.2f_y%+0.2f_z%+0.2f_dz_eul.tif' % (os.path.splitext(dem2_fn)[0], \
-                os.path.splitext(os.path.split(dem1_fn)[1])[0], xshift_m, yshift_m, zshift_m) 
+        dst_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str
         print("Writing out aligned difference map with median vertical offset removed") 
         iolib.writeGTiff(diff_euler_align - zshift_m, dst_fn, dem1_clip_ds) 
         
         #Write out aligned dem_2 with vertial offset removed
-        dst_fn = '%s_align_x%+0.2f_y%+0.2f_z%+0.2f.tif' % (os.path.splitext(dem2_fn)[0], \
-                xshift_m, yshift_m, zshift_m)
+        dst_fn = outprefix + '%s_align.tif' % xyz_shift_str
         print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn)
         dem2_align = iolib.ds_getma(dem2_ds_align)
         iolib.writeGTiff(dem2_align + zshift_m, dst_fn, dem2_ds_align) 
+
+        makeplot = True
+        if makeplot:
+            dst_fn = outprefix + '%s_nuth_plot.png' % xyz_shift_str
+            print("Writing Nuth and Kaab plot: %s" % dst_fn)
+            f_nuth.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0)
+
+            print("Creating final plot")
+            dem1_hs = geolib.gdaldem_mem_ma(dem1_orig, dem1_clip_ds, returnma=True)
+            dem2_hs = geolib.gdaldem_mem_ma(dem2_orig, dem2_clip_ds, returnma=True)
+            f,axa = plt.subplots(2, 3, figsize=(11, 8.5))          
+            for ax in axa.ravel():
+                pltlib.hide_ticks(ax)
+            dem_clim = malib.calcperc(dem1_orig, (2,98))
+            axa[0,0].imshow(dem1_hs, cmap='gray')
+            axa[0,0].imshow(dem1_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6)
+            pltlib.add_scalebar(axa[0,0], res=res)
+            axa[0,0].set_title('Reference DEM')
+            axa[0,1].imshow(dem2_hs, cmap='gray')
+            axa[0,1].imshow(dem2_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6)
+            axa[0,1].set_title('Source DEM')
+            axa[0,2].imshow(~(np.ma.getmaskarray(diff_euler)), clim=(0,1), cmap='gray')
+            axa[0,2].set_title('Surfaces for co-registration')
+            dz_clim = malib.calcperc_sym(diff_euler, (2, 98))
+            im = axa[1,0].imshow(-diff_euler, cmap='RdBu', clim=dz_clim)
+            axa[1,0].set_title('Elev. Diff. Before')
+            im = axa[1,1].imshow(-diff_euler_align, cmap='RdBu', clim=dz_clim)
+            axa[1,1].set_title('Elev. Diff. After')
+            #Tried to insert Nuth fig here
+            #ax_nuth.change_geometry(1,2,1)
+            #f.axes.append(ax_nuth)
+            pltlib.add_cbar(axa[1,2], im, label='Elev Diff (m)')
+            suptitle = '%s\nx: %+0.2fm, y: %+0.2fm, z: %+0.2fm' % \
+                    (os.path.split(outprefix)[-1], xshift_m, yshift_m , zshift_m)
+            f.suptitle(suptitle)
+            f.tight_layout()
+            plt.subplots_adjust(top=0.90)
+            dst_fn = outprefix + '%s_align.png' % xyz_shift_str
+            print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn)
+            f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0)
+            plt.show()
 
 if __name__ == "__main__":
     main()
