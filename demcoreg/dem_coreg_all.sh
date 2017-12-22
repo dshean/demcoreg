@@ -30,7 +30,7 @@ clean=false
 
 #Copy DEMs and toa to subdir
 #mkdir dem_coreg
-#shiftc -r -d --include='-DEM_2m.tif' --include='-DEM_32m.tif' --include='-DEM_8m.tif' --include 'toa.tif' *00 dem_coreg/
+#shiftc -L -r -d --include='-DEM_2m.tif' --include='-DEM_32m.tif' --include='-DEM_8m.tif' --include 'toa.tif' *00 dem_coreg/
 ##rsync -aLmv --include='*-DEM_*.tif' --include '*toa.tif' --include='*/' --exclude='*' *00 dem_coreg/
 ##rsync -aLmv --include='*-DEM_2m.tif' --include='*-DEM_32m.tif' --include='*-DEM_8m.tif' --include '*toa.tif' --include='*/' --exclude='*' *00 dem_coreg/
 #cd dem_coreg
