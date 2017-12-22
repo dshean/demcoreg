@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 
+#Todo
+#Implement check for empty diff
+#Proper iteration, look at residuals
+
 import sys
 import os
 import argparse
