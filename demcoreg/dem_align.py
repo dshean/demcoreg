@@ -31,6 +31,19 @@ def getparser():
     parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
 
+def get_mask(ds, dem_fn):
+    #Mask glaciers, vegetated slopes
+    static_mask = dem_mask.get_lulc_mask(ds, mask_glaciers=True, filter='not_forest', bareground_thresh=60)
+    #Mask glaciers only
+    #static_mask = dem_mask.get_icemask(ds)
+    #Top-of-atmosphere reflectance threshold (requires orthoimage and output from toa.sh)
+    toa_fn = dem_mask.get_toa_fn(dem_fn)
+    toa_ds = warplib.memwarp_multi_fn([toa_fn,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]
+    toa_mask = dem_mask.get_toa_mask(toa_ds)
+    static_mask = np.logical_and(static_mask, toa_mask)
+    #Return final mask, ready to be applied
+    return ~(static_mask)
+
 def main(argv=None):
     parser = getparser()
     args = parser.parse_args()
@@ -81,11 +94,7 @@ def main(argv=None):
     dem2_orig = iolib.ds_getma(dem2_clip_ds, 1)
 
     if not args.nomask:
-        #Mask glaciers, vegetated slopes
-        #static_mask = ~(dem_mask.get_lulc_mask(dem1_clip_ds, mask_glaciers=True, \
-        #        filter='not_forest+not_water', bareground_thresh=60))
-        #Mask glaciers
-        static_mask = ~(dem_mask.get_icemask(dem1_clip_ds))
+        static_mask = get_mask(dem2_clip_ds, dem2_fn)
         dem1 = np.ma.array(dem1_orig, mask=static_mask)
         dem2 = np.ma.array(dem2_orig, mask=static_mask)
     else:
@@ -201,11 +210,7 @@ def main(argv=None):
 
         #Recompute the mask
         if not args.nomask:
-            #Mask glaciers, vegetated slopes
-            #static_mask = ~(dem_mask.get_lulc_mask(dem1_clip_ds, mask_glaciers=True, \
-            #        filter='not_forest+not_water', bareground_thresh=60))
-            #Mask glaciers
-            static_mask = ~(dem_mask.get_icemask(dem1_clip_ds))
+            static_mask = get_mask(dem2_clip_ds, dem2_fn)
             diff_euler_align_masked = np.ma.array(diff_euler_align, mask=static_mask) 
         else:
             diff_euler_align_masked = diff_euler_align
