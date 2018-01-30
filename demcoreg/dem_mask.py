@@ -429,8 +429,44 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     ds = gdal.Open(out_fn)
     return ds
 
+def get_toa_fn(dem_fn):
+    #Original approach, assumes DEM file is in *00/dem_*/*DEM_32m.tif
+    #dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
+    dem_dir_list = os.path.split(os.path.abspath(dem_fn))[0].split(os.sep)
+    import re
+    #Get index of the top level pair directory containing toa (WV02_20140514_1030010031114100_1030010030896000)
+    r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)][0]
+    #Reconstruct dir
+    dem_dir = (os.sep).join(dem_dir_list[0:r_idx+1])
+    #Find toa.tif in top-level dir
+    toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+    if not toa_fn:
+        cmd = ['toa.sh', dem_dir]
+        print(cmd)
+        subprocess.call(cmd)
+        toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+    toa_fn = toa_fn[0]
+    return toa_fn
+
+def get_toa_ds(dem_fn):
+    toa_fn = get_toa_fn(dem_fn)
+    if os.path.exists(toa_fn):
+        toa_ds = gdal.Open(toa_fn)
+    else:
+        toa_ds = None
+    return toa_ds
+
+#TOA reflectance filter
+def get_toa_mask(toa_ds, toa_thresh=0.4):
+    print("Applying TOA filter (masking values >= %0.2f)" % toa_thresh)
+    toa = iolib.ds_getma(toa_ds)
+    toa_mask = np.ma.masked_greater(toa, toa_thresh)
+    #This should be 1 for valid surfaces, 0 for snowcovered surfaces
+    toa_mask = ~(np.ma.getmaskarray(toa_mask))
+    return toa_mask
+
 def getparser():
-    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water']
+    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water', 'none']
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
     #parser.add_argument('-outdir', default=None, help='Output directory')
@@ -519,15 +555,7 @@ def main():
     ds_dict['toa'] = None
     if args.toa:
         #Use top of atmosphere scaled reflectance values (0-1)
-        dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
-        toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        if not toa_fn:
-            cmd = ['toa.sh', dem_dir]
-            print(cmd)
-            subprocess.call(cmd)
-            toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        toa_fn = toa_fn[0]
-        toa_ds = gdal.Open(toa_fn)
+        toa_ds = get_toa_ds(dem_fn)
         ds_dict['toa'] = toa_ds  
 
     #Cull all of the None ds from the ds_dict
@@ -550,22 +578,28 @@ def main():
     #Need better handling of ds order based on input ds here
 
     dem = iolib.ds_getma(ds_dict['dem'])
+
+    #Initialize the mask
+    #True (1) represents "valid" unmasked pixel, False (0) represents "invalid" pixel to be masked
     newmask = ~(np.ma.getmaskarray(dem))
 
     #Basename for output files
     out_fn_base = os.path.splitext(dem_fn)[0]
 
     #Generate a rockmask
-    #Note: these now have RGI glacier polygons removed
-    #if 'lulc' in ds_dict.keys():
-    #We are almost always going to want LULC mask
-    rockmask = get_lulc_mask(dem_ds, mask_glaciers=mask_glaciers, \
-            filter=args.filter, bareground_thresh=args.bareground_thresh, out_fn=out_fn_base)
-    if writeall:
-        out_fn = out_fn_base+'_rockmask.tif'
-        print("Writing out %s\n" % out_fn)
-        iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
-    newmask = np.logical_and(rockmask, newmask)
+    if args.filter == 'none' or args.bareground_thresh == 0:
+        print("Skipping LULC filter")
+    else:
+        #Note: these now have RGI glacier polygons removed
+        #if 'lulc' in ds_dict.keys():
+        #We are almost always going to want LULC mask
+        rockmask = get_lulc_mask(dem_ds, mask_glaciers=mask_glaciers, \
+                filter=args.filter, bareground_thresh=args.bareground_thresh, out_fn=out_fn_base)
+        if writeall:
+            out_fn = out_fn_base+'_rockmask.tif'
+            print("Writing out %s\n" % out_fn)
+            iolib.writeGTiff(rockmask, out_fn, src_ds=ds_dict['dem'])
+        newmask = np.logical_and(rockmask, newmask)
 
     if 'snodas' in ds_dict.keys():
         #SNODAS snow depth filter
@@ -609,12 +643,8 @@ def main():
 
     if 'toa' in ds_dict.keys():
         #TOA reflectance filter
-        toa_thresh = args.toa_thresh
-        print("Applying TOA filter (masking values >= %0.2f)" % toa_thresh)
-        toa = iolib.ds_getma(ds_dict['toa'])
-        toa_mask = np.ma.masked_greater(toa, toa_thresh)
         #This should be 1 for valid surfaces, 0 for snowcovered surfaces
-        toa_mask = ~(np.ma.getmaskarray(toa_mask))
+        toa_mask = get_toa_mask(ds_dict['toa'], args.toa_thresh)
         if writeall:
             out_fn = out_fn_base+'_toamask.tif'
             print("Writing out %s\n" % out_fn)
