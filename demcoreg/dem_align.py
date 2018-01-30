@@ -257,11 +257,12 @@ def main(argv=None):
             axa[0,2].imshow(~(np.ma.getmaskarray(diff_euler)), clim=(0,1), cmap='gray')
             axa[0,2].set_title('Surfaces for co-registration')
             dz_clim = malib.calcperc_sym(diff_euler, (2, 98))
+            dz_clim = (-10, 10)
             im = axa[1,0].imshow(-diff_euler, cmap='RdBu', clim=dz_clim)
             axa[1,0].set_title('Elev. Diff. Before')
-            im = axa[1,1].imshow(-diff_euler_align_masked, cmap='RdBu', clim=dz_clim)
+            im = axa[1,1].imshow(-(diff_euler_align_masked - zshift_m), cmap='RdBu', clim=dz_clim)
             axa[1,1].set_title('Elev. Diff. After')
-            im = axa[1,2].imshow(-diff_euler_align, cmap='RdBu', clim=dz_clim)
+            im = axa[1,2].imshow(-(diff_euler_align - zshift_m), cmap='RdBu', clim=dz_clim)
             axa[1,2].set_title('Elev. Diff. Final')
             #Tried to insert Nuth fig here
             #ax_nuth.change_geometry(1,2,1)
@@ -273,7 +274,7 @@ def main(argv=None):
             f.tight_layout()
             plt.subplots_adjust(top=0.90)
             dst_fn = outprefix + '%s_align.png' % xyz_shift_str
-            print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn)
+            print("Writing out figure: %s" % dst_fn)
             f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0)
             #plt.show()
 

@@ -312,8 +312,14 @@ def genplot(x, y, fit, xdata=None, ydata=None, maxpts=10000):
     ax.axhline(color='k')
     ax.plot(a, f_a, 'b', label=nuth_func_str)
     ax.set_xlim(*bin_range)
-    pad = 0.2 * np.max([np.abs(y.min()), np.abs(y.max())])
-    ax.set_ylim(y.min() - pad, y.max() + pad)
+    abs_ylim = np.max([np.abs(y.min()), np.abs(y.max())])
+    pad = 0.2 * abs_ylim 
+    ylim = (-abs_ylim - pad, abs_ylim + pad)
+    #ylim = (y.min() - pad, y.max() + pad)
+    minylim = (-10,10)
+    if ylim[0] > minylim[0]:
+        ylim = minylim
+    ax.set_ylim(*ylim)
     ax.legend(prop={'size':8})
     return f 
 
