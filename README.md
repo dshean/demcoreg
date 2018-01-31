@@ -11,12 +11,11 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 
 ### Some useful command-line utilities (run with no arguments for usage)
 - dem_mask.py - generate mask of snow-free rock surfaces using reflectance, LULC, SNODAS, MODSCAG
+- dem_align.py - robust raster DEM co-registration (e.g., Nuth and Kaab [2011]) for surfaces with variable slope and aspect
 - pc_align_wrapper.sh - wrapper around NASA Ames Stereo Pipeline pc_align utility for iterative closest point co-registration 
-- apply_dem_translation.py - update geotransform and applies vertical offset
+- apply_dem_translation.py - update geotransform and remove vertical offset
 - compute_dz.py - simple DEM difference calculation
 - robust_stats.py - print out robust statistics for sampled DEM differences before/after co-registration
-- ...
-
 - coreglib.py - implementation of various co-registration algorithms: Nuth and Kaab (2011), normalized cross-correlation with sub-pixel refinement, sum of absolute differences
 
 ## Examples 
