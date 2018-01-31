@@ -11,29 +11,45 @@ import matplotlib.pyplot as plt
 
 from pygeotools.lib import malib, iolib
 
-def apply_xy_shift(ds, xshift_m, yshift_m):
+def apply_xy_shift(ds, dx, dy, createcopy=True):
     """
     Apply horizontal shift to GDAL dataset GeoTransform
     
     Returns:
     GDAL Dataset copy with updated GeoTransform
     """
-    print("X shift: ", xshift_m)
-    print("Y shift: ", yshift_m)
+    print("X shift: ", dx)
+    print("Y shift: ", dy)
    
     #Update geotransform
     gt_orig = ds.GetGeoTransform()
     gt_shift = np.copy(gt_orig)
-    gt_shift[0] += xshift_m
-    gt_shift[3] += yshift_m
+    gt_shift[0] += dx 
+    gt_shift[3] += dy
 
     print("Original geotransform:", gt_orig)
     print("Updated geotransform:", gt_shift)
 
     #Update ds Geotransform
-    ds_align = iolib.mem_drv.CreateCopy('', ds, 1)
+    if createcopy:
+        ds_align = iolib.mem_drv.CreateCopy('', ds, 1)
+    else:
+        #Update in place, assume ds is opened as GA_Update
+        ds_align = ds
     ds_align.SetGeoTransform(gt_shift)
     return ds_align
+
+def apply_z_shift(ds, dz, createcopy=True):
+    print("Z shift: ", dz)
+    if createcopy:
+        ds_shift = iolib.mem_drv.CreateCopy('', ds, 1)
+    else:
+        ds_shift = ds
+    b = ds_shift.GetRasterBand(1)
+    a = iolib.b_getma(b)
+    a += dz
+    b.WriteArray(a.filled())
+    return ds_shift
 
 def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
     """Compute subpixel horizontal offset between input rasters using sum of absolute differences (SAD) method
@@ -271,7 +287,6 @@ def compute_offset_nuth(dh, slope, aspect):
     print(fit)
     genplot(xdata_clip, ydata_clip, fit) 
     """
-    
     #Compute robust statistics for 1-degree bins
     bin_count, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='count')
     bin_med, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='median')
@@ -304,12 +319,12 @@ def genplot(x, y, fit, xdata=None, ydata=None, maxpts=10000):
         idx = random.sample(list(range(xdata.size)), 10000)
     else:
         idx = np.arange(xdata.size)
-    f, ax = plt.subplots()
+    f, ax = plt.subplots(figsize=(6,6))
     ax.set_xlabel('Aspect (deg)')
     ax.set_ylabel('dh/tan(slope) (m)')
     ax.plot(xdata[idx], ydata[idx], 'k.', label='Orig pixels')
     ax.plot(x, y, 'ro', label='Bin median')
-    ax.axhline(color='k')
+    ax.axhline(color='gray')
     ax.plot(a, f_a, 'b', label=nuth_func_str)
     ax.set_xlim(*bin_range)
     abs_ylim = np.max([np.abs(y.min()), np.abs(y.max())])
