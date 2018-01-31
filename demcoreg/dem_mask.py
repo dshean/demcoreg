@@ -430,30 +430,33 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
     return ds
 
 def get_toa_fn(dem_fn):
+    toa_fn = None
     #Original approach, assumes DEM file is in *00/dem_*/*DEM_32m.tif
     #dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
     dem_dir_list = os.path.split(os.path.abspath(dem_fn))[0].split(os.sep)
     import re
     #Get index of the top level pair directory containing toa (WV02_20140514_1030010031114100_1030010030896000)
-    r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)][0]
-    #Reconstruct dir
-    dem_dir = (os.sep).join(dem_dir_list[0:r_idx+1])
-    #Find toa.tif in top-level dir
-    toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-    if not toa_fn:
-        cmd = ['toa.sh', dem_dir]
-        print(cmd)
-        subprocess.call(cmd)
+    r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)]
+    if r_idx:
+        r_idx = r_idx[0]
+        #Reconstruct dir
+        dem_dir = (os.sep).join(dem_dir_list[0:r_idx+1])
+        #Find toa.tif in top-level dir
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-    toa_fn = toa_fn[0]
+        if not toa_fn:
+            cmd = ['toa.sh', dem_dir]
+            print(cmd)
+            subprocess.call(cmd)
+            toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+        toa_fn = toa_fn[0]
     return toa_fn
 
 def get_toa_ds(dem_fn):
+    toa_ds = None
     toa_fn = get_toa_fn(dem_fn)
-    if os.path.exists(toa_fn):
-        toa_ds = gdal.Open(toa_fn)
-    else:
-        toa_ds = None
+    if toa_fn is not None:
+        if os.path.exists(toa_fn):
+            toa_ds = gdal.Open(toa_fn)
     return toa_ds
 
 #TOA reflectance filter
