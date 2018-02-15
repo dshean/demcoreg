@@ -26,6 +26,9 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 ### filter_glas.py output
 ![Sample filter_glas](docs/20151227_0803_10200100499B7700_10200100496E3000-DEM_32m_glas_sm.jpg)
 
+### dem_align.py 
+![Sample dem_align](docs/20081123_0446_1735796131_1735796132_40m-DEM_hma_nasadem_hgt_lt5m_err_nuth_x+26.19_y+182.36_z-65.52_align_sm.jpg)
+
 ## Documentation
 
 http://demcoreg.readthedocs.io
