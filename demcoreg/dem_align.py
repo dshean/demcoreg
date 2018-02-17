@@ -28,6 +28,8 @@ def getparser():
             help='Type of co-registration to use')
     parser.add_argument('-nomask', action='store_true', help='By default, input DEMs are masked to limit co-registration for static surfaces. \
             Set this to use all surfaces')
+    parser.add_argument('-tiltcorr', action='store_true', help='After preliminary translation, fit plane to residual elevation offsets and remove')
+    parser.add_argument('-tol', type=float, default=0.02, help='When iterative translation magnitude is below this tolerance (meters), break and write out final corrected DEM')   
     parser.add_argument('-max_offset', type=float, default=100, \
             help='Maximum expected horizontal offset in meters')
     parser.add_argument('-outdir', default=None, help='Output directory')
@@ -158,11 +160,13 @@ def main(argv=None):
     mode = args.mode
     apply_mask = not args.nomask
     max_offset_m = args.max_offset
+    tiltcorr = args.tiltcorr
 
     #These are tolerances (in meters) to stop iteration
-    min_dx = 0.01
-    min_dy = 0.01
-    min_dz = 0.01
+    tol = args.tol
+    min_dx = tol
+    min_dy = tol
+    min_dz = tol
 
     #Maximum number of iterations
     max_n = 10 
@@ -188,7 +192,6 @@ def main(argv=None):
     #This is a shortcut to resample to match "source" DEM
     dem1_ds = warplib.memwarp_multi_fn([dem1_fn,], res=dem2_ds, extent=dem2_ds, t_srs=dem2_ds)[0]
     #dem1_ds = gdal.Open(dem1_fn, gdal.GA_ReadOnly)
-
 
     #Create a copy to be updated in place
     dem2_ds_align = iolib.mem_drv.CreateCopy('', dem2_ds, 0)
@@ -220,17 +223,37 @@ def main(argv=None):
         #Apply the horizontal shift to the original dataset
         dem2_ds_align = coreglib.apply_xy_shift(dem2_ds_align, dx, dy, createcopy=False)
         dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, dz, createcopy=False)
+
         dx_total += dx
         dy_total += dy
         dz_total += dz
         print("Cumulative offset: dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx_total, dy_total, dz_total))
+
+        #Fit plane to residuals and remove
+        #Might be better to do this after converging
+        """
+        if tiltcorr:
+            print("Applying planar tilt correction")
+            gt = dem2_ds_align.GetGeoTransform()
+            #Need to compute diff_euler here
+            #Copy portions of compute_offset, create new function 
+            vals, resid, coeff = geolib.ma_fitplane(diff_euler_align, gt, perc=(4, 96))
+            dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
+        """
+
         n += 1
         print("\n")
-        if n > max_n or (abs(dx) <= min_dx and abs(dy) <= min_dy and abs(dz) <= min_dz):
+        #If magnitude of shift in all directions is less than tol
+        #if n > max_n or (abs(dx) <= min_dx and abs(dy) <= min_dy and abs(dz) <= min_dz):
+        #If magnitude of shift is less than tol
+        dm = np.sqrt(dx**2 + dy**2 + dz**2)
+        if n > max_n or dm < tol:
             break
 
     #String to append to output filenames
     xyz_shift_str_cum = '_%s_x%+0.2f_y%+0.2f_z%+0.2f' % (mode, dx_total, dy_total, dz_total)
+    if tiltcorr: 
+        xyz_shift_str_cum += "_tiltcorr"
 
     #Compute original elevation difference
     if True:
@@ -260,6 +283,21 @@ def main(argv=None):
             static_mask = np.ma.getmaskarray(diff_euler_align)
         diff_euler_align_compressed = diff_euler_align[~static_mask]
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
+
+        #Fit plane to residuals and remove
+        #Note: should run another round to compute new translation after this
+        if tiltcorr:
+            print("Applying planar tilt correction")
+            gt = dem1_clip_ds_align.GetGeoTransform()
+            vals, resid, coeff = geolib.ma_fitplane(diff_euler_align, gt, perc=(4, 96))
+            diff_euler_align -= vals
+            if not apply_mask:
+                static_mask = np.ma.getmaskarray(diff_euler_align)
+            diff_euler_align_compressed = diff_euler_align[~static_mask]
+            diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
+   
+        #Compute higher-order fits?
+        #Could also attempt to model along-track and cross-track artifacts
 
         #Write out aligned eulerian difference map for clipped extent with vertial offset removed
         dst_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum
