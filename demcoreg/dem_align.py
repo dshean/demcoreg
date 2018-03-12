@@ -170,7 +170,7 @@ def main(argv=None):
     min_dz = tol
 
     #Maximum number of iterations
-    max_n = 1*10 
+    max_n = 10 
     
     outdir = args.outdir
     if outdir is None:
@@ -220,7 +220,7 @@ def main(argv=None):
             print("Writing offset plot: %s" % dst_fn)
             fig.gca().set_title(xyz_shift_str_iter)
             fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-            plt.close(fig)
+            
 
         #Apply the horizontal shift to the original dataset
         dem2_ds_align = coreglib.apply_xy_shift(dem2_ds_align, dx, dy, createcopy=False)
