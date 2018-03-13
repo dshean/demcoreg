@@ -392,18 +392,14 @@ def main(argv=None):
             cmd.extend (['-mode', args.mode])
             if args.nomask:
                 cmd.append('-nomask')
-            if args.max_offset:
-                cmd.extend(['-max_offset', str(args.max_offset)])
-            if args.tol:
-                cmd.extend(['-tol',str(args.tol)])
+            cmd.extend(['-max_offset', str(args.max_offset)])
+            cmd.extend(['-tol',str(args.tol)])
             if args.outdir:
                 cmd.extend(['-outdir', args.outdir])
             print ("Running another iteration of slope/aspect fitting after tiltcorrection")
             print (cmd)
             subprocess.call(cmd)
-        
-        
-
+            
 
 if __name__ == "__main__":
     main()
