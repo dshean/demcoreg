@@ -170,7 +170,7 @@ def main(argv=None):
     min_dz = tol
 
     #Maximum number of iterations
-    max_n = 10 
+    max_n = 1*10 
     
     outdir = args.outdir
     if outdir is None:
@@ -220,7 +220,7 @@ def main(argv=None):
             print("Writing offset plot: %s" % dst_fn)
             fig.gca().set_title(xyz_shift_str_iter)
             fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-            
+            plt.close(fig)
 
         #Apply the horizontal shift to the original dataset
         dem2_ds_align = coreglib.apply_xy_shift(dem2_ds_align, dx, dy, createcopy=False)
@@ -297,8 +297,20 @@ def main(argv=None):
                 static_mask = np.ma.getmaskarray(diff_euler_align)
             diff_euler_align_compressed = diff_euler_align[~static_mask]
             diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
-            dst_fn1 = outprefix + '%s_align_dz_eul_fitplane.tif' % xyz_shift_str_cum
-            iolib.writeGTiff(vals, dst_fn1, dem1_clip_ds)
+            print("Creating fitplane plot")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            fitplane_clim = malib.calcperc(vals, (2,98))
+            im=ax.imshow(vals, cmap='cpt_rainbow', clim=fitplane_clim)
+            res = float(geolib.get_res(dem2_clip_ds, square=True)[0])
+            pltlib.add_scalebar(ax, res=res)
+            pltlib.hide_ticks(ax)
+            pltlib.add_cbar(ax, im, label='Fit plane residuals (m)')
+            fig.tight_layout()
+            dst_fn1 = outprefix + '%s_align_dz_eul_fitplane.png' % xyz_shift_str_cum
+            print("Writing out figure: %s" % dst_fn1)
+            fig.savefig(dst_fn1, dpi=300, bbox_inches='tight', pad_inches=0.1)
+            
+            
    
         #Compute higher-order fits?
         #Could also attempt to model along-track and cross-track artifacts
@@ -376,11 +388,20 @@ def main(argv=None):
         
         ##Hack for another round of dem_align.py if tiltcorr is true, using cmd subprocess call
         if tiltcorr:
-            cmd = ['dem_align.py', dem1_fn, dst_fn2]
-            cmd.extend (['-mode', 'nuth'])
+            cmd = ['dem_align.py', args.ref_fn, dst_fn2]
+            cmd.extend (['-mode', args.mode])
+            if args.nomask:
+                cmd.append('-nomask')
+            if args.max_offset:
+                cmd.extend(['-max_offset', str(args.max_offset)])
+            if args.tol:
+                cmd.extend(['-tol',str(args.tol)])
+            if args.outdir:
+                cmd.extend(['-outdir', args.outdir])
             print ("Running another iteration of slope/aspect fitting after tiltcorrection")
             print (cmd)
             subprocess.call(cmd)
+        
         
 
 
