@@ -170,7 +170,7 @@ def main(argv=None):
     min_dz = tol
 
     #Maximum number of iterations
-    max_n = 1*10 
+    max_n = 10 
     
     outdir = args.outdir
     if outdir is None:
@@ -220,7 +220,6 @@ def main(argv=None):
             print("Writing offset plot: %s" % dst_fn)
             fig.gca().set_title(xyz_shift_str_iter)
             fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-            plt.close(fig)
 
         #Apply the horizontal shift to the original dataset
         dem2_ds_align = coreglib.apply_xy_shift(dem2_ds_align, dx, dy, createcopy=False)
@@ -319,8 +318,7 @@ def main(argv=None):
         dst_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum
         print("Writing out aligned difference map with median vertical offset removed") 
         iolib.writeGTiff(diff_euler_align, dst_fn, dem1_clip_ds) 
-        
-       
+          
     #Write out aligned dem_2 with vertial offset removed
     if True:
         dst_fn2 = outprefix + '%s_align.tif' % xyz_shift_str_cum
