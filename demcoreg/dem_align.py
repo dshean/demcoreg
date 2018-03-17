@@ -151,10 +151,8 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
     #Note: minus signs here since we are computing dz=(src-ref), but adjusting src 
     return -dx, -dy, -dz, static_mask, fig
 
-def main(argv=None):
-    parser = getparser()
-    args = parser.parse_args()
-
+#Defined a second main to allow recursion with new arguments for second run
+def main2(args):
     #Should check that files exist
     dem1_fn = args.ref_fn
     dem2_fn = args.src_fn
@@ -286,12 +284,21 @@ def main(argv=None):
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 
         #Fit plane to residuals and remove
-        #Note: should run another round to compute new translation after this
         if tiltcorr:
             print("Applying planar tilt correction")
             gt = dem1_clip_ds_align.GetGeoTransform()
-            vals, resid, coeff = geolib.ma_fitplane(diff_euler_align, gt, perc=(4, 96))
+            #Need to apply the mask here, so we're only fitting over static surfaces
+            #Note that the origmask=False will compute vals for all x and y indices, which is what we want 
+            vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask), \
+                    gt, perc=(4, 96), origmask=False)
+            #Remove planar offset from difference map
             diff_euler_align -= vals
+            #Remove planar offset from aligned dem2
+            #Note: dimensions of ds and vals will be different as vals are computed for clipped intersection
+            #Recompute planar offset for dem2_ds_align extent
+            xgrid, ygrid = geolib.get_xy_grids(dem2_ds_align)
+            vals = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2] 
+            dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
             if not apply_mask:
                 static_mask = np.ma.getmaskarray(diff_euler_align)
             diff_euler_align_compressed = diff_euler_align[~static_mask]
@@ -299,7 +306,7 @@ def main(argv=None):
             print("Creating fitplane plot")
             fig, ax = plt.subplots(figsize=(6, 6))
             fitplane_clim = malib.calcperc(vals, (2,98))
-            im=ax.imshow(vals, cmap='cpt_rainbow', clim=fitplane_clim)
+            im = ax.imshow(vals, cmap='cpt_rainbow', clim=fitplane_clim)
             res = float(geolib.get_res(dem2_clip_ds, square=True)[0])
             pltlib.add_scalebar(ax, res=res)
             pltlib.hide_ticks(ax)
@@ -308,8 +315,6 @@ def main(argv=None):
             dst_fn1 = outprefix + '%s_align_dz_eul_fitplane.png' % xyz_shift_str_cum
             print("Writing out figure: %s" % dst_fn1)
             fig.savefig(dst_fn1, dpi=300, bbox_inches='tight', pad_inches=0.1)
-            
-            
    
         #Compute higher-order fits?
         #Could also attempt to model along-track and cross-track artifacts
@@ -322,7 +327,7 @@ def main(argv=None):
     #Write out aligned dem_2 with vertial offset removed
     if True:
         dst_fn2 = outprefix + '%s_align.tif' % xyz_shift_str_cum
-        print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn)
+        print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn2)
         #Might be cleaner way to write out MEM ds directly to disk
         dem2_align = iolib.ds_getma(dem2_ds_align)
         iolib.writeGTiff(dem2_align, dst_fn2, dem2_ds_align) 
@@ -383,21 +388,24 @@ def main(argv=None):
         dst_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
         print("Writing out figure: %s" % dst_fn)
         f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-        
-        ##Hack for another round of dem_align.py if tiltcorr is true, using cmd subprocess call
+       
+        #Removing residual planar tilt can introduce additional slope/aspect dependent offset 
+        #Want to run another round of main dem_align after removing planar tilt
         if tiltcorr:
-            cmd = ['dem_align.py', args.ref_fn, dst_fn2]
-            cmd.extend (['-mode', args.mode])
-            if args.nomask:
-                cmd.append('-nomask')
-            cmd.extend(['-max_offset', str(args.max_offset)])
-            cmd.extend(['-tol',str(args.tol)])
-            if args.outdir:
-                cmd.extend(['-outdir', args.outdir])
-            print ("Running another iteration of slope/aspect fitting after tiltcorrection")
-            print (cmd)
-            subprocess.call(cmd)
-            
+            print("\n Rerunning after applying tilt correction \n")
+            #Create copy of original arguments
+            import copy
+            args2 = copy.copy(args)
+            #Use aligned, tilt-corrected DEM as input src_fn for second round
+            args2.src_fn = dst_fn2
+            #Assume we've already corrected most of the tilt during first round (also prevents endless loop)
+	    args2.tiltcorr = False
+            main2(args2)
+
+def main(argv=None):
+    parser = getparser()
+    args = parser.parse_args()
+    main2(args)
 
 if __name__ == "__main__":
     main()
