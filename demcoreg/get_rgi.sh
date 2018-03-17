@@ -10,6 +10,10 @@ if [ -z "$DATADIR" ] ; then
     export DATADIR=$HOME/data
 fi
 
+if [ ! -d $DATADIR ] ; then
+    mkdir -p $DATADIR
+fi
+
 echo "Downlaiding RGI glacier inventory shp"
 cd $DATADIR
 pwd
