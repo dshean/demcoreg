@@ -186,7 +186,8 @@ def get_lulc_source(ds):
     #If the dem geom is within CONUS (nlcd extent), use it
     geolib.geom_transform(ds_geom, t_srs=lulc_geom.GetSpatialReference())
 
-    if lulc_geom.Contains(ds_geom):
+    #This was lulc_geom.Contains, but changed to force LULC for CONUS ds that extend beyond LULC domain
+    if lulc_geom.Intersects(ds_geom):
         print("Using NLCD 30m data for rockmask")
         lulc_source = 'nlcd'
     else:
