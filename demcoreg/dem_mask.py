@@ -446,11 +446,16 @@ def get_toa_fn(dem_fn):
         #Find toa.tif in top-level dir
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         if not toa_fn:
-            cmd = ['toa.sh', dem_dir]
-            print(cmd)
-            subprocess.call(cmd)
-            toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        toa_fn = toa_fn[0]
+            ortho_fn = glob.glob(os.path.join(dem_dir, '*ortho*.tif'))
+            if ortho_fn:
+                cmd = ['toa.sh', dem_dir]
+                print(cmd)
+                subprocess.call(cmd)
+                toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+        if toa_fn:
+            toa_fn = toa_fn[0]
+        else:
+            toa_fn = None
     return toa_fn
 
 def get_toa_ds(dem_fn):

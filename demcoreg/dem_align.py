@@ -43,6 +43,7 @@ def get_mask(ds, dem_fn):
     #static_mask = dem_mask.get_icemask(ds)
     #Top-of-atmosphere reflectance threshold (requires orthoimage and output from toa.sh)
     toa_fn = dem_mask.get_toa_fn(dem_fn)
+    #toa_fn = None
     if toa_fn is not None:
         toa_ds = warplib.memwarp_multi_fn([toa_fn,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]
         toa_mask = dem_mask.get_toa_mask(toa_ds)
