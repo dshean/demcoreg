@@ -14,6 +14,7 @@ Dependencies: gdal, wget, requests, bs4
 
 #To do: 
 #Add minium valid pixel count check - if not met, relax some criteria
+#Integrate 1-km LULC data: http://www.landcover.org/data/landcover/
 
 import sys
 import os
