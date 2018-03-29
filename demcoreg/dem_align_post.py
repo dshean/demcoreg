@@ -71,12 +71,11 @@ def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
         plt.tight_layout()
 
         #Note: postscript doesn't properly handle tansparency
-        #fig_fn = 'icp_translation_vec_proj_meters_orthogonal.pdf'
-        fig_fn = 'icp_translation_vec_local_meters_orthogonal.pdf'
+        fig_fn = 'dem_align_translation_vec_local_meters_orthogonal.pdf'
         plt.savefig(fig_fn, dpi=600, bbox_inches='tight')
 
 print("Building fn_list")
-fn_list = glob.glob('*dem_align/*align.tif')
+fn_list = glob.glob('*/dem*/*dem_align/*align.tif')
 print("Isolating x, y, z offsets")
 xyz = np.array([np.array([a[1:] for a in np.array(fn.split('_'))[-4:-1]], dtype=float) for fn in fn_list])
 print(xyz.size)
