@@ -400,7 +400,7 @@ def main2(args):
             #Use aligned, tilt-corrected DEM as input src_fn for second round
             args2.src_fn = dst_fn2
             #Assume we've already corrected most of the tilt during first round (also prevents endless loop)
-	    args2.tiltcorr = False
+            args2.tiltcorr = False
             main2(args2)
 
 def main(argv=None):
