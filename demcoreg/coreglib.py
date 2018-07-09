@@ -255,6 +255,9 @@ def compute_offset_nuth(dh, slope, aspect):
             nbins=nbins, bin_range=bin_range)
     bin_med, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='median', \
             nbins=nbins, bin_range=bin_range)
+    #Started implementing this for more generic binning, needs testing
+    #bin_count, x_bin_edges, y_bin_edges = malib.get_2dhist(xdata, ydata, \
+    #        xlim=bin_range, nbins=(nbins, nbins), stat='count')
 
     """
     #Mask bins in grid directions, can potentially contain biased stats
