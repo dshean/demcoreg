@@ -63,13 +63,13 @@ max_disp=10
 #max_disp=5
 
 #ATM "resolution" should be ~10 m - finer for repeat tracks
-#atm_res=10.0
+#ref_res=10.0
 #fmt="--csv-format '1:lat 2:lon 3:height_above_datum'"
 #This x y is ECEF
 #fmt="--csv-format '1:x 2:y 3:height_above_datum'"
 
 #ICESat-1 along-track spacing
-atm_res=140.0
+ref_res=140.0
 fmt="--csv-format '3:lat 4:lon 5:height_above_datum'"
 
 pc_align_opt=''
@@ -80,23 +80,23 @@ point2dem_opt=''
 sample_pts=false
 
 #Extract info about reference point cloud to use for alignment
-if [ ${atm##*.} = 'csv' ] ; then
+if [ ${ref##*.} = 'csv' ] ; then
     pc_align_opt+=$fmt
     ref_type='point'
-elif [ ${atm##*.} = 'tif' ] ; then
+elif [ ${ref##*.} = 'tif' ] ; then
     #ASP PC
-    if gdalinfo $atm | grep -q POINT_OFFSET ; then
+    if gdalinfo $ref | grep -q POINT_OFFSET ; then
         #This info should now be available in PC.tif header
-        atm_res=0.5
+        ref_res=0.5
         ref_type='asp_pc'
     #Gridded geotif
     else
-        atm_res=$(gdalinfo $atm | grep 'Pixel Size' | awk -F'[(,)]' '{print $2}')
+        ref_res=$(gdalinfo $ref | grep 'Pixel Size' | awk -F'[(,)]' '{print $2}')
         ref_type='grid'
     fi
 else
     echo "Unrecognized input extension:"
-    echo $atm
+    echo $ref
     exit 1
 fi
 
@@ -104,7 +104,7 @@ fi
 if [ ${dem##*.} = 'csv' ] ; then
     dem_type='point'
     #ATM "resolution" should be ~10 m - finer for repeat tracks
-    dem_res=$atm_res
+    dem_res=$ref_res
     use_point2dem=true
     usemask=false
     pc_align_opt+=$fmt
@@ -141,6 +141,13 @@ if $rot ; then
     use_point2dem=true
 fi
 
+if $scale ; then
+    #Use similarity transform to solve for scaling
+    align_method='similarity-point-to-point'
+    #align_method='similarity-least-squares'
+    use_point2dem=true
+fi
+
 #Set this to force output of new PC and run point2dem
 #Otherwise, run apply_dem_translation
 if ! $use_point2dem ; then
@@ -151,7 +158,7 @@ fi
 
 #If DEM is more dense, use as "reference" and trans-reference
 #if false ; then
-if [ $(echo "a=($dem_res < $atm_res); a" | bc -l) -eq 1 ] ; then
+if [ $(echo "a=($dem_res < $ref_res); a" | bc -l) -eq 1 ] ; then
     trans_source=false
     trans_reference=true
 else
@@ -174,14 +181,13 @@ else
     pc_align_opt+=" --num-iterations $n_iter" 
 fi
 
+#This was test for Hexagon mapping camera
+#--initial-ned-translation "0 0 -6000"
+
 #Should be pc_align ref src
 pc_align_opt+=" --threads $ncpu --datum WGS_1984"
 
-#Point-to-point works MUCH better for limited ref points in a plane
-#Looks like trans-reference point-to-point wins for Thwaites test cases
-
-align_method="point-to-point"
-#align_method="point-to-plane"
+#Use specified alignment method
 pc_align_opt+=" --alignment-method $align_method"
 
 outlier_ratio=0.75
@@ -266,7 +272,7 @@ function logfile_init () {
     date | tee -a $logfile
     echo | tee -a $logfile
     echo "Input resolution:" | tee -a $logfile
-    echo "ref: " $(basename $atm) $atm_res | tee -a $logfile 
+    echo "ref: " $(basename $ref) $ref_res | tee -a $logfile 
     echo "src: " $(basename $dem) $dem_res | tee -a $logfile
     echo "ref type:" $ref_type | tee -a $logfile
     echo "align_method: $align_method" | tee -a $logfile
@@ -279,7 +285,7 @@ function logfile_init () {
 dem_orig=$dem
 
 #Note pc_align should append a '-' to the specified outprefix
-#out=pc_align_ref_$(basename ${atm%.*})_src_$(basename ${dem%.*})
+#out=pc_align_ref_$(basename ${ref%.*})_src_$(basename ${dem%.*})
 outdir=${dem_orig%.*}_pt_align
 if [ "$ref_type" == "grid" ] ; then
     outdir=${dem_orig%.*}_grid_align
@@ -298,8 +304,8 @@ pc_align_opt+=" -o $out"
 #This masks the input DEM to the region around the points
 if $usemask ; then
     #Identify mask filename
-    mask=${atm%.*}_mask.tif
-    #mask=${atm%.*}_masked.tif
+    mask=${ref%.*}_mask.tif
+    #mask=${ref%.*}_masked.tif
     #mask=rainier_surfaces_for_alignment.shp
     #mask=rainier_surfaces_for_alignment_all_rivervalleys.shp
     if [ -e $mask ] ; then
@@ -336,7 +342,7 @@ if $trans_source ; then
     logfile_init $logfile
 
     if $sample_pts ; then
-        sample $atm $dem $outdir $logfile
+        sample $ref $dem $outdir $logfile
     fi
 
     #Want to load as many ref points as possible
@@ -344,7 +350,7 @@ if $trans_source ; then
 
     #if [ ! -e ${out}-trans_source.tif ] ; then
     if [ ! -e ${out}-trans_source-end_errors.csv ] ; then
-        cmd="pc_align $pc_align_opt $atm $dem"
+        cmd="pc_align $pc_align_opt $ref $dem"
         runcmd "$cmd" $logfile
         mv -v ${out}-beg_errors.csv ${out}-trans_source-beg_errors.csv
         mv -v ${out}-end_errors.csv ${out}-trans_source-end_errors.csv
@@ -366,7 +372,7 @@ if $trans_source ; then
                 pc_align_opt+=" --initial-transform $itrans"
                 pc_align_opt+=' --save-transformed-source-points'
                 #If point, use head -10 to generate dummy ref
-                cmd="pc_align $pc_align_opt $atm $dem_orig"
+                cmd="pc_align $pc_align_opt $ref $dem_orig"
                 #runcmd "$cmd" $logfile
                 echo $cmd | tee -a $logfile
                 eval time $cmd
@@ -388,7 +394,7 @@ if $trans_source ; then
     fi
 
     if $sample_pts ; then
-        sample $atm $out_dem $outdir $logfile
+        sample $ref $out_dem $outdir $logfile
     fi
 
     date | tee -a $logfile
@@ -405,7 +411,7 @@ if $trans_reference ; then
     logfile_init $logfile
 
     if $sample_pts ; then
-        sample $atm $dem $outdir $logfile
+        sample $ref $dem $outdir $logfile
     fi
 
     #Ref should always be as dense as possible
@@ -413,7 +419,7 @@ if $trans_reference ; then
     pc_align_opt+=" --max-num-reference-points $max_points --max-num-source-points $max_points"
 
     if [ ! -e ${out}-trans_reference-end_errors.csv ] ; then
-        cmd="pc_align $pc_align_opt $dem $atm"
+        cmd="pc_align $pc_align_opt $dem $ref"
         runcmd "$cmd" $logfile
         mv -v ${out}-beg_errors.csv ${out}-trans_reference-beg_errors.csv
         mv -v ${out}-end_errors.csv ${out}-trans_reference-end_errors.csv
@@ -436,7 +442,7 @@ if $trans_reference ; then
                 pc_align_opt+=" --initial-transform $itrans"
                 pc_align_opt+=' --save-inv-transformed-reference-points' 
                 #If point, use head -10 to generate dummy ref
-                cmd="pc_align $pc_align_opt $dem_orig $atm"
+                cmd="pc_align $pc_align_opt $dem_orig $ref"
                 #Don't want to write to pollute logfile
                 #runcmd "$cmd" $logfile
                 echo $cmd | tee -a $logfile
@@ -457,7 +463,7 @@ if $trans_reference ; then
     fi
 
     if $sample_pts ; then
-        sample $atm $out_dem $outdir $logfile
+        sample $ref $out_dem $outdir $logfile
     fi
     
     date | tee -a $logfile
