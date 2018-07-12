@@ -3,12 +3,10 @@
 #David Shean
 #dshean@gmail.com
 
-#Wrapper for ASP utility pc_align to align two input point clouds
-#Written for specific case of reference point data (ATM) and source DEM (WV), hence variable names
+#Wrapper for ASP utility pc_align to align two input point clouds or DEMs
 
 #To do
 #Improved mask handling - make sure working with new pygeotools apply_mask.py
-#If two grids are provided, clip the ref grid w/ shp, buffer src grid by max_disp, clip src grid
 
 echo
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] ; then
@@ -24,9 +22,7 @@ set -o pipefail
 #max_points=1000000
 max_points=10000000
 
-#atm=lat_lon_z_180_rock.csv
-atm=$1
-#dem=20100709_1534_1030010005B3D100_103001000612DC00-DEM_4x.tif
+ref=$1
 dem=$2
 
 itrans=false
@@ -34,8 +30,8 @@ if [ ! -z "$3" ] ; then
     itrans=$3
 fi
 
-if [ ! -e $atm ] ; then
-    echo "Unable to locate $atm"
+if [ ! -e $ref ] ; then
+    echo "Unable to locate $ref"
     exit 1
 fi
 
@@ -48,6 +44,9 @@ fi
 #rot=true
 rot=false
 
+#Set this to compute trans+rot, instead of default trans
+scale=false
+
 #Set number of threads to use
 ncpu=4
 
@@ -56,11 +55,7 @@ n_iter=2000
 
 #Max displacement (0 is default)
 #NOTE: can extract this from last column of input csv (v*dt)
-#max_disp=1000
-#max_disp=200
-#max_disp=40
 max_disp=10
-#max_disp=5
 
 #ATM "resolution" should be ~10 m - finer for repeat tracks
 #ref_res=10.0
@@ -103,7 +98,6 @@ fi
 #Extract info about source DEM to be aligned
 if [ ${dem##*.} = 'csv' ] ; then
     dem_type='point'
-    #ATM "resolution" should be ~10 m - finer for repeat tracks
     dem_res=$ref_res
     use_point2dem=true
     usemask=false
