@@ -8,43 +8,54 @@
 #To do
 #Improved mask handling - make sure working with new pygeotools apply_mask.py
 
-echo
-if [ "$#" -ne 2 ] && [ "$#" -ne 3 ] ; then
-    echo "Usage is $0 ref_pts.[csv|tif] src_dem.tif [trans.txt]"
-    echo
-    exit 1
+set -e
+
+usage()
+{
+    echo; echo "Usage is $0 ref_pts.{csv|tif} src_dem.tif [pc_align options]"; 
+    echo; "Also see pc_align usage"; echo; exit 1
+}
+
+if [ "$#" -lt 2 ] ; then
+    usage
 fi
 
 #This returns appropriate status when cmd is piped to tee
 set -o pipefail
 
+#Reference DEM/PC
+ref=$1
+shift
+if [ ! -e $ref ] ; then
+    echo "Unable to locate $ref"
+	usage
+fi
+
+#Source DEM/PC to shift
+dem=$1
+shift
+if [ ! -e $dem ] ; then
+    echo "Unable to locate $dem"
+    usage
+fi
+
+## Define default parameters
+
+#Alignment method
+align_method=point-to-point
+#align_method=point-to-plane
+
 #This is maximum number of points to use
 #max_points=1000000
 max_points=10000000
 
-ref=$1
-dem=$2
-
+#Initial transformation
 itrans=false
-if [ ! -z "$3" ] ; then
-    itrans=$3
-fi
 
-if [ ! -e $ref ] ; then
-    echo "Unable to locate $ref"
-    exit 1
-fi
-
-if [ ! -e $dem ] ; then
-    echo "Unable to locate $dem"
-    exit 1
-fi
-
-#Set this to compute trans+rot, instead of default trans
-#rot=true
+#Set this to enable rotation in addition to translation 
 rot=false
 
-#Set this to compute trans+rot, instead of default trans
+#Set this to enable scaling in addition to translation and rotation
 scale=false
 
 #Set number of threads to use
@@ -57,6 +68,48 @@ n_iter=2000
 #NOTE: can extract this from last column of input csv (v*dt)
 max_disp=10
 
+#Set outlier ratio
+#outlier_ratio=0.95
+outlier_ratio=0.75
+
+#Sample points and compute stats before and after coreg
+#Uses raster differencing for gridded DEMs and point sampling for PC
+#Can slow down processing for large inputs
+sample_pts=true
+
+## Parse any user-specfiied parameters
+#See pc_align usage
+#Note that there is no checking here, user must specify properly
+while [ "$1" != "" ]; do
+	case $1 in
+		--alignment-method)	    shift
+								align_method=$1
+								;;
+		--initial-transform)	shift
+								itrans=$1
+								;;
+		--num-iterations )		shift
+								n_iter=$1
+								;;
+		--max-displacement)		shift
+								max_disp=$1
+								;;
+		--max-points)			shift
+								max_points=$1
+								;;
+		-r | --rot )        	rot=true 
+								;;
+		-s | --scale )        	scale=true 
+								;;
+		-h | --help )           usage
+								exit
+								;;
+		* )                     usage
+								exit 1
+	esac
+	shift
+done
+
 #ATM "resolution" should be ~10 m - finer for repeat tracks
 #ref_res=10.0
 #fmt="--csv-format '1:lat 2:lon 3:height_above_datum'"
@@ -65,14 +118,11 @@ max_disp=10
 
 #ICESat-1 along-track spacing
 ref_res=140.0
+#Format from demcoreg ICESat-1 csv
 fmt="--csv-format '3:lat 4:lon 5:height_above_datum'"
 
 pc_align_opt=''
 point2dem_opt=''
-
-#Sample points before and after coreg
-#Requires ASP/Tools build
-sample_pts=false
 
 #Extract info about reference point cloud to use for alignment
 if [ ${ref##*.} = 'csv' ] ; then
@@ -114,7 +164,6 @@ elif [ ${dem##*.} = 'tif' ] ; then
     else
         dem_type='grid'
         #Can used compute_dz.py here
-        sample_pts=true
         use_point2dem=false
         usemask=true
         dem_res=$(gdalinfo $dem | grep 'Pixel Size' | awk -F'[(,)]' '{print $2}')
@@ -164,7 +213,6 @@ fi
 #Could also just do this with geotransform and scale z values of final grid
 #Must also comment out --num-iterations below
 if $itrans ; then
-    itrans=$3
     pc_align_opt+=" --initial-transform $itrans"
     #Set number of iterations to 0
     n_iter=0
@@ -184,12 +232,7 @@ pc_align_opt+=" --threads $ncpu --datum WGS_1984"
 #Use specified alignment method
 pc_align_opt+=" --alignment-method $align_method"
 
-outlier_ratio=0.75
-#outlier_ratio=0.95
 pc_align_opt+=" --outlier-ratio $outlier_ratio"
-
-#Do we want to use fsaa here?  Input is already gridded at $dem_res
-#point2dem_opt+='--fsaa'
 
 #Script for sampling points
 #This is now bundled with demcoreg
