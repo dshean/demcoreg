@@ -5,7 +5,7 @@ Library of functions that can be used for co-registration of raster data
 
 For many situations, ASP pc_align ICP co-registration is superior to these approaches. See pc_align_wrapper.sh
 """
-
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -194,7 +194,7 @@ def nuth_func(x, a, b, c):
     return y
 
 #This is the Nuth and Kaab (2011) method
-def compute_offset_nuth(dh, slope, aspect):
+def compute_offset_nuth(dh, slope, aspect, min_count=100):
     """Compute horizontal offset between input rasters using Nuth and Kaab [2011] (nuth) method
     """
     import scipy.optimize as optimization
@@ -204,7 +204,13 @@ def compute_offset_nuth(dh, slope, aspect):
     #c_seed = (mean_dh/np.tan(np.deg2rad(mean_slope))) 
     
     med_dh = malib.fast_median(dh)
+    if dh.count() < min_count:
+        sys.exit("Not enough dh samples")
+
     med_slope = malib.fast_median(slope)
+    if slope.count() < min_count:
+        sys.exit("Not enough dh samples")
+
     c_seed = (med_dh/np.tan(np.deg2rad(med_slope))) 
 
     x0 = np.array([0.0, 0.0, c_seed])
@@ -270,8 +276,8 @@ def compute_offset_nuth(dh, slope, aspect):
     #idx = ~(np.ma.getmaskarray(bin_med))
 
     #Remove any bins with only a few points
-    min_count = 9
-    idx = (bin_count.filled(0) >= min_count) 
+    min_bin_count = 9
+    idx = (bin_count.filled(0) >= min_bin_count) 
 
     bin_med = bin_med[idx]
     bin_centers = bin_centers[idx]
