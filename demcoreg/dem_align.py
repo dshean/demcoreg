@@ -290,8 +290,10 @@ def main2(args):
             gt = dem1_clip_ds_align.GetGeoTransform()
             #Need to apply the mask here, so we're only fitting over static surfaces
             #Note that the origmask=False will compute vals for all x and y indices, which is what we want 
+            #Should offer option for polynomial of arbitrary order
+            #Also, want a better robust fit - maybe throw out more outliers
             vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask), \
-                    gt, perc=(4, 96), origmask=False)
+                    gt, perc=(12.5, 87.5), origmask=False)
             #Remove planar offset from difference map
             diff_euler_align -= vals
             #Remove planar offset from aligned dem2

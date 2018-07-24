@@ -99,7 +99,7 @@ def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
         plt.title('Sum of Absolute Differences')
         plt.imshow(m)
         plt.scatter(*sp_argmax[::-1])
-        plt.show()
+        #plt.show()
 
     return m, int_offset, sp_offset
 
@@ -278,7 +278,7 @@ def compute_offset_nuth(dh, slope, aspect):
 
     fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
     f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
-    plt.show()
+    #plt.show()
     #genplot(xdata, ydata, fit) 
 
     print(fit)

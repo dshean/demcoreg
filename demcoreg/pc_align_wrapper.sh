@@ -46,8 +46,8 @@ align_method=point-to-point
 #align_method=point-to-plane
 
 #This is maximum number of points to use
-#max_points=1000000
-max_points=10000000
+max_points=1000000
+#max_points=10000000
 
 #Initial transformation
 itrans=false
