@@ -22,25 +22,34 @@ from imview.lib import pltlib, gmtColormap
 cpt_rainbow = gmtColormap.get_rainbow()
 
 def getparser():
-    parser = argparse.ArgumentParser(description="Perform DEM co-registration using old algorithms")
+    parser = argparse.ArgumentParser(description="Perform DEM co-registration using old algorithms", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('ref_fn', type=str, help='Reference DEM filename')
     parser.add_argument('src_fn', type=str, help='Source DEM filename to be shifted')
     parser.add_argument('-mode', type=str, default='nuth', choices=['ncc', 'sad', 'nuth', 'none'], \
             help='Type of co-registration to use')
-    parser.add_argument('-nomask', action='store_true', help='By default, input DEMs are masked to limit co-registration for static surfaces. \
+    parser.add_argument('-nomask', action='store_true', \
+            help='By default, input DEMs are masked to limit co-registration for static surfaces. \
             Set this to use all surfaces')
-    parser.add_argument('-tiltcorr', action='store_true', help='After preliminary translation, fit plane to residual elevation offsets and remove')
-    parser.add_argument('-tol', type=float, default=0.02, help='When iterative translation magnitude is below this tolerance (meters), break and write out final corrected DEM')   
+    filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water', 'none']
+    parser.add_argument('-filter', type=str, default='not_forest', choices=filter_choices, \
+            help='Define areas to use as reference surfaces for co-registration')
+    parser.add_argument('-tiltcorr', action='store_true', \
+            help='After preliminary translation, fit plane to residual elevation offsets and remove')
+    parser.add_argument('-tol', type=float, default=0.02, \
+            help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM') 
     parser.add_argument('-max_offset', type=float, default=100, \
             help='Maximum expected horizontal offset in meters')
     parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
 
-def get_mask(ds, dem_fn):
-    #Mask glaciers, vegetated slopes
-    static_mask = dem_mask.get_lulc_mask(ds, mask_glaciers=True, filter='not_forest', bareground_thresh=60)
-    #Mask glaciers only
-    #static_mask = dem_mask.get_icemask(ds)
+def get_mask(ds, dem_fn, filter='not_forest', mask_glaciers=True, bareground_thresh=60):
+    #This logic needs to be cleaned up
+    if filter != 'none':
+        #Mask glaciers, vegetated slopes
+        static_mask = dem_mask.get_lulc_mask(ds, mask_glaciers=mask_glaciers, filter=filter, bareground_thresh=bareground_thresh)
+    else:
+        #Mask glaciers only
+        static_mask = dem_mask.get_icemask(ds)
     #Top-of-atmosphere reflectance threshold (requires orthoimage and output from toa.sh)
     toa_fn = dem_mask.get_toa_fn(dem_fn)
     #toa_fn = None
@@ -51,7 +60,8 @@ def get_mask(ds, dem_fn):
     #Return final mask, ready to be applied
     return ~(static_mask)
 
-def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, remove_outliers=True, apply_mask=True):
+def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, remove_outliers=True, \
+        apply_mask=True, filter=filter):
     #Make sure the input datasets have the same resolution/extent
     #Use projection of source DEM
     dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
@@ -78,7 +88,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
     static_mask = None
     if apply_mask:
         #Need dem2_fn here to find TOA fn
-        static_mask = get_mask(dem2_clip_ds, dem2_fn)
+        static_mask = get_mask(dem2_clip_ds, dem2_fn, filter=filter)
         dem1 = np.ma.array(dem1, mask=static_mask)
         dem2 = np.ma.array(dem2, mask=static_mask)
         diff_euler = np.ma.array(diff_euler, mask=static_mask)
@@ -159,6 +169,7 @@ def main2(args):
     dem2_fn = args.src_fn
     mode = args.mode
     apply_mask = not args.nomask
+    filter = args.filter
     max_offset_m = args.max_offset
     tiltcorr = args.tiltcorr
 
@@ -207,7 +218,8 @@ def main2(args):
     #Now iteratively update geotransform and vertical shift
     while True:
         print("*** Iteration %i ***" % n)
-        dx, dy, dz, static_mask, fig = compute_offset(dem1_ds, dem2_ds_align, dem2_fn, mode, max_offset_m, apply_mask=apply_mask)
+        dx, dy, dz, static_mask, fig = compute_offset(dem1_ds, dem2_ds_align, dem2_fn, mode, max_offset_m, \
+                apply_mask=apply_mask, filter=filter)
         if n == 1:
             static_mask_orig = static_mask
         xyz_shift_str_iter = "dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx, dy, dz)
