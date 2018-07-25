@@ -194,7 +194,7 @@ def nuth_func(x, a, b, c):
     return y
 
 #This is the Nuth and Kaab (2011) method
-def compute_offset_nuth(dh, slope, aspect, min_count=100):
+def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     """Compute horizontal offset between input rasters using Nuth and Kaab [2011] (nuth) method
     """
     import scipy.optimize as optimization
@@ -272,9 +272,6 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100):
     bin_edges = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_edges)
     """
 
-    #Remove any empty bins
-    #idx = ~(np.ma.getmaskarray(bin_med))
-
     #Remove any bins with only a few points
     min_bin_count = 9
     idx = (bin_count.filled(0) >= min_bin_count) 
@@ -283,9 +280,9 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100):
     bin_centers = bin_centers[idx]
 
     fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
-    f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
-    #plt.show()
-    #genplot(xdata, ydata, fit) 
+    f = None
+    if plot:
+        f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
 
     print(fit)
     return fit, f
