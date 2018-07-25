@@ -2,9 +2,11 @@
 
 #Create plot of dem_align results for many input files
 
+import sys
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+from osgeo import gdal
 from pygeotools.lib import geolib, malib
 
 def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
@@ -74,21 +76,52 @@ def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
         fig_fn = 'dem_align_translation_vec_local_meters_orthogonal.pdf'
         plt.savefig(fig_fn, dpi=600, bbox_inches='tight')
 
+def make_map(x, y, z, cx, cy):
+    f, axa = plt.subplots(3, sharex=True, sharey=True, figsize=(5,10))
+    vmin, vmax = (-15, 15)
+    s=5
+    cmap='RdYlBu'
+    opt={'edgecolor':'k', 'vmin':vmin, 'vmax':vmax, 'cmap':cmap, 's':s, 'lw':0.3}
+    sc = axa[0].scatter(cx, cy, c=x, **opt)
+    axa[0].set_title("X-offset required to align")
+    axa[0].set_aspect('equal')
+    axa[1].scatter(cx, cy, c=y, **opt) 
+    axa[1].set_title("Y-offset required to align")
+    axa[2].scatter(cx, cy, c=z, **opt) 
+    axa[2].set_title("Z-offset required to align")
+    f.colorbar(sc, ax=axa.ravel().tolist())
+    fig_fn = 'dem_align_map.png'
+    f.savefig(fig_fn, dpi=300, bbox_inches='tight')
+
 print("Building fn_list")
-fn_list = glob.glob('*/dem*/*dem_align/*align.tif')
+fn_list = glob.glob('*dem_align/*align.tif')
+fn_list = sys.argv[1:]
 print("Isolating x, y, z offsets")
 xyz = np.array([np.array([a[1:] for a in np.array(fn.split('_'))[-4:-1]], dtype=float) for fn in fn_list])
+print("Extracting center coords")
+t_srs = geolib.hma_aea_srs
+#t_srs = geolib.wgs_srs
+ll = np.array([geolib.get_center(gdal.Open(fn), t_srs=t_srs) for fn in fn_list])
+cy = ll[:,1]
+cx = ll[:,0]
 print(xyz.size)
 m = np.sqrt(np.sum(np.square(xyz), axis=1))
-stats = malib.print_stats(m)
-f=3.5
-thresh = stats[5]+stats[6]*f
-thresh = 90
-idx = (m > thresh)
-bad_fn = np.array(fn_list)[idx]
-np.savetxt('bad_fn.txt', bad_fn, fmt='%s')
-xyz = xyz[~idx]
-print(xyz.size)
+
+#Throw out gross outliers
+filter=True
+if filter:
+    stats = malib.print_stats(m)
+    print(stats)
+    f=3.5
+    #thresh = stats[5]+stats[6]*f
+    thresh = 90
+    idx = (m > thresh)
+    bad_fn = np.array(fn_list)[idx]
+    np.savetxt('bad_fn.txt', bad_fn, fmt='%s')
+    xyz = xyz[~idx]
+    cx = cx[~idx]
+    cy = cy[~idx]
+    print(xyz.size)
 
 x = xyz[:,0]
 y = xyz[:,1]
@@ -96,4 +129,5 @@ z = xyz[:,2]
 
 print("Creating plot")
 make_plot3d(x, y, z)
-
+print("Creating map")
+make_map(x,y,z,cx,cy)
