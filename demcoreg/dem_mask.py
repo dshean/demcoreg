@@ -21,7 +21,6 @@ import os
 import subprocess
 import glob
 import argparse
-from collections import OrderedDict
 
 from osgeo import gdal, ogr, osr
 import numpy as np
@@ -517,7 +516,7 @@ def main():
     dem_dt = timelib.fn_getdatetime(dem_fn)
 
     #This will hold datasets for memwarp and output processing
-    ds_dict = OrderedDict() 
+    ds_dict = {}
     ds_dict['dem'] = dem_ds
 
     ds_dict['lulc'] = None
@@ -569,9 +568,7 @@ def main():
         ds_dict['toa'] = toa_ds  
 
     #Cull all of the None ds from the ds_dict
-    for k,v in ds_dict.items():
-        if v is None:
-            del ds_dict[k]
+    ds_dict = {k: v for k, v in ds_dict.items() if v is not None}
 
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values
