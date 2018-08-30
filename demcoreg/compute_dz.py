@@ -20,6 +20,7 @@ def getparser():
     parser.add_argument('-tr', default='max', help='Output resolution (default: %(default)s)')
     parser.add_argument('-te', default='intersection', help='Output extent (default: %(default)s)')
     parser.add_argument('-t_srs', default='first', help='Output projection (default: %(default)s)')
+    parser.add_argument('-rate', action='store_true', help='Attempt to generate elevation change rate products (dz/dt) in m/yr (default: %(default)s)')
     parser.add_argument('fn1', type=str, help='Raster filename 1')
     parser.add_argument('fn2', type=str, help='Raster filename 2')
     return parser
@@ -39,10 +40,6 @@ def main():
 
     fn_list = [dem1_fn, dem2_fn]
 
-    print("Warping DEMs to same res/extent/proj")
-    #This will check input param for validity, could do beforehand
-    dem1_ds, dem2_ds = warplib.memwarp_multi_fn(fn_list, extent=args.te, res=args.tr, t_srs=args.t_srs)
-
     outdir = args.outdir
     if outdir is None:
         outdir = os.path.dirname(os.path.abspath(dem1_fn))
@@ -52,13 +49,8 @@ def main():
 
     outprefix = os.path.splitext(os.path.split(dem1_fn)[1])[0]+'_'+os.path.splitext(os.path.split(dem2_fn)[1])[0]
 
-    print("Loading input DEMs into masked arrays")
-    dem1 = iolib.ds_getma(dem1_ds, 1)
-    dem2 = iolib.ds_getma(dem2_ds, 1)
-
-    #Compute dz/dt rates if possible, in m/yr
-    rates = True 
-    if rates:
+    #Compute dz/dt rate if possible, in m/yr
+    if args.rate:
         #Extract basename
         #This was a hack to work with timestamp array filenames that have geoid offset applied
         adj = ''
@@ -67,18 +59,18 @@ def main():
         dem1_fn_base = re.sub(adj, '', os.path.splitext(dem1_fn)[0]) 
         dem2_fn_base = re.sub(adj, '', os.path.splitext(dem2_fn)[0]) 
 
-        #Attempt to load timestamp arrays (for mosaics) if present
+        #Attempt to load ordinal timestamp arrays (for mosaics) if present
         t1_fn = dem1_fn_base+'_ts.tif'
         t2_fn = dem2_fn_base+'_ts.tif'
+        t_unit = 'day'
+        if not os.path.exists(t1_fn) and not os.path.exists(t2_fn):
+            #Try to find processed output from dem_mosaic index
+            #These are decimal years
+            t1_fn = dem1_fn_base+'index_ts.tif'
+            t2_fn = dem2_fn_base+'index_ts.tif'
+            t_unit = 'year'
         if os.path.exists(t1_fn) and os.path.exists(t2_fn):
-            print("Preparing timestamp arrays")
-            t1_ds, t2_ds = warplib.memwarp_multi_fn([t1_fn, t2_fn], extent=dem1_ds, res=dem1_ds)
-            print("Loading timestamps into masked arrays")
-            t1 = iolib.ds_getma(t1_ds)
-            t2 = iolib.ds_getma(t2_ds)
-            #Compute dt in days
-            t_factor = t2 - t1
-            t_factor /= 365.25
+            fn_list.extend([t1_fn, t2_fn])
         else:
             #Attempt to extract timestamps from input filenames
             t1 = timelib.fn_getdatetime(dem1_fn)
@@ -90,7 +82,18 @@ def main():
                 print("Time differences is %s, dh/%0.3f" % (dt, t_factor))
             else:
                 print("Unable to extract timestamps for input images")
-                rates = False
+                args.rate = False
+
+
+    print("Warping DEMs to same res/extent/proj")
+    #This will check input param for validity, could do beforehand
+    ds_list = warplib.memwarp_multi_fn(fn_list, extent=args.te, res=args.tr, t_srs=args.t_srs)
+    dem1_ds = ds_list[0]
+    dem2_ds = ds_list[1]
+
+    print("Loading input DEMs into masked arrays")
+    dem1 = iolib.ds_getma(dem1_ds, 1)
+    dem2 = iolib.ds_getma(dem2_ds, 1)
 
     #Compute relative elevation difference with Eulerian approach 
     print("Computing eulerian elevation difference")
@@ -100,6 +103,17 @@ def main():
     #if not np.any(~dem1.mask*~dem2.mask):
     if diff_euler.count() == 0:
         sys.exit("No valid overlap between input DEMs")
+
+    if len(fn_list) == 4:
+        t1_ds = ds_list[2]
+        t2_ds = ds_list[3]
+        print("Loading timestamps into masked arrays")
+        t1 = iolib.ds_getma(t1_ds)
+        t2 = iolib.ds_getma(t2_ds)
+        #Compute dt in years 
+        t_factor = t2 - t1
+        if t_unit == 'day':
+            t_factor /= 365.25
 
     if True:
         print("Eulerian elevation difference stats:")
@@ -111,11 +125,16 @@ def main():
         dst_fn = os.path.join(outdir, outprefix+'_dz_eul.tif')
         print(dst_fn)
         iolib.writeGTiff(diff_euler, dst_fn, dem1_ds, ndv=diffndv)
-        if rates:
+        if args.rate:
             print("Writing Eulerian rate map")
             dst_fn = os.path.join(outdir, outprefix+'_dz_eul_rate.tif')
             print(dst_fn)
             iolib.writeGTiff(diff_euler/t_factor, dst_fn, dem1_ds, ndv=diffndv)
+            if len(fn_list) == 4:
+                print("Writing time difference map")
+                dst_fn = os.path.join(outdir, outprefix+'_dz_eul_dt.tif')
+                print(dst_fn)
+                iolib.writeGTiff(t_factor, dst_fn, dem1_ds, ndv=diffndv)
 
     if False:
         print("Writing Eulerian relative elevation difference map")
