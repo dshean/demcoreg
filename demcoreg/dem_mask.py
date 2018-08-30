@@ -499,7 +499,7 @@ def main():
     writeall = True
 
     mask_glaciers = True
-    if args.no_icemask:
+    if args.no_icemask or args.filter == 'none':
         mask_glaciers = False
 
     #Define top-level directory containing DEM

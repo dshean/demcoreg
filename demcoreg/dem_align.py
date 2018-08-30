@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 #Todo
+#Centralized masking and filtering
 #Better outlier removal
 #Check Nuth and Kaab bin median
 #Implement check for empty diff
@@ -39,6 +40,8 @@ def getparser():
             help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM') 
     parser.add_argument('-max_offset', type=float, default=100, \
             help='Maximum expected horizontal offset in meters')
+    parser.add_argument('-max_iter', type=int, default=10, \
+            help='Maximum number of iterations, if tol is not reached')
     parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
 
@@ -65,7 +68,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
     #Make sure the input datasets have the same resolution/extent
     #Use projection of source DEM
     dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
-            res='max', extent='intersection', t_srs=dem2_ds)
+            res='max', extent='intersection', t_srs=dem2_ds, r='cubic')
 
     #Compute size of NCC and SAD search window in pixels 
     res = float(geolib.get_res(dem1_clip_ds, square=True)[0])
@@ -139,7 +142,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         dem1_slope = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='slope', returnma=True)
         dem1_aspect = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='aspect', returnma=True)
         #Compute relationship between elevation difference, slope and aspect
-        fit_param, fig = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect)
+        fit_param, fig = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect, plot=False)
         #fit_param[0] is magnitude of shift vector
         #fit_param[1] is direction of shift vector
         #fit_param[2] is mean bias divided by tangent of mean slope 
@@ -180,7 +183,7 @@ def main2(args):
     min_dz = tol
 
     #Maximum number of iterations
-    max_n = 10 
+    max_n = args.max_iter
     
     outdir = args.outdir
     if outdir is None:
@@ -201,7 +204,7 @@ def main2(args):
     dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
     #Often the "ref" DEM is high-res lidar or similar
     #This is a shortcut to resample to match "source" DEM
-    dem1_ds = warplib.memwarp_multi_fn([dem1_fn,], res=dem2_ds, extent=dem2_ds, t_srs=dem2_ds)[0]
+    dem1_ds = warplib.memwarp_multi_fn([dem1_fn,], res=dem2_ds, extent=dem2_ds, t_srs=dem2_ds, r='cubic')[0]
     #dem1_ds = gdal.Open(dem1_fn, gdal.GA_ReadOnly)
 
     #Create a copy to be updated in place
@@ -227,7 +230,7 @@ def main2(args):
 
         #Should make an animation of this converging
         if fig is not None:
-            dst_fn = outprefix + '_%s_iter%i_plot.png' % (mode, n)
+            dst_fn = outprefix + '_%s_iter%02i_plot.png' % (mode, n)
             print("Writing offset plot: %s" % dst_fn)
             fig.gca().set_title(xyz_shift_str_iter)
             fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
@@ -270,7 +273,7 @@ def main2(args):
     #Compute original elevation difference
     if True:
         dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
-                res='max', extent='intersection', t_srs=dem2_ds) 
+                res='max', extent='intersection', t_srs=dem2_ds, r='cubic') 
         dem1_orig = iolib.ds_getma(dem1_clip_ds, 1)
         dem2_orig = iolib.ds_getma(dem2_clip_ds, 1)
         diff_euler_orig = dem2_orig - dem1_orig
@@ -287,12 +290,14 @@ def main2(args):
     #Compute final elevation difference
     if True:
         dem1_clip_ds_align, dem2_clip_ds_align = warplib.memwarp_multi([dem1_ds, dem2_ds_align], \
-                res='max', extent='intersection', t_srs=dem2_ds_align) 
+                res='max', extent='intersection', t_srs=dem2_ds_align, r='cubic') 
         dem1_align = iolib.ds_getma(dem1_clip_ds_align, 1)
         dem2_align = iolib.ds_getma(dem2_clip_ds_align, 1)
         diff_euler_align = dem2_align - dem1_align
         if not apply_mask:
             static_mask = np.ma.getmaskarray(diff_euler_align)
+        #This can fail due to shifts - need to recompute
+        #IndexError: boolean index did not match indexed array along dimension 0; dimension is 2244 but corresponding boolean dimension is 2246
         diff_euler_align_compressed = diff_euler_align[~static_mask]
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 

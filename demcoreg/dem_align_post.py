@@ -3,6 +3,7 @@
 #Create plot of dem_align results for many input files
 
 import sys
+import os
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
@@ -94,10 +95,11 @@ def make_map(x, y, z, cx, cy):
     f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
 print("Building fn_list")
-fn_list = glob.glob('*dem_align/*align.tif')
+#fn_list = glob.glob('*dem_align/*align.tif')
+#cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
 fn_list = sys.argv[1:]
 print("Isolating x, y, z offsets")
-xyz = np.array([np.array([a[1:] for a in np.array(fn.split('_'))[-4:-1]], dtype=float) for fn in fn_list])
+xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split('_'))[-4:-1]], dtype=float) for fn in fn_list])
 print("Extracting center coords")
 t_srs = geolib.hma_aea_srs
 #t_srs = geolib.wgs_srs
