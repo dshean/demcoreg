@@ -12,7 +12,8 @@ set -e
 
 usage()
 {
-    echo; echo "Usage is $0 ref_pts.{csv|tif} src_dem.tif [pc_align options]"; 
+    echo; echo "Usage is $0 ref_pts.{csv|tif} src_dem.tif [pc_align options]"
+    echo "Note that options must come AFTER the two filenames are specified"
     echo; "Also see pc_align usage"; echo; exit 1
 }
 
