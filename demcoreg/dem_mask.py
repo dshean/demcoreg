@@ -14,13 +14,13 @@ Dependencies: gdal, wget, requests, bs4
 
 #To do: 
 #Add minium valid pixel count check - if not met, relax some criteria
+#Integrate 1-km LULC data: http://www.landcover.org/data/landcover/
 
 import sys
 import os
 import subprocess
 import glob
 import argparse
-from collections import OrderedDict
 
 from osgeo import gdal, ogr, osr
 import numpy as np
@@ -186,7 +186,8 @@ def get_lulc_source(ds):
     #If the dem geom is within CONUS (nlcd extent), use it
     geolib.geom_transform(ds_geom, t_srs=lulc_geom.GetSpatialReference())
 
-    if lulc_geom.Contains(ds_geom):
+    #This was lulc_geom.Contains, but changed to force LULC for CONUS ds that extend beyond LULC domain
+    if lulc_geom.Intersects(ds_geom):
         print("Using NLCD 30m data for rockmask")
         lulc_source = 'nlcd'
     else:
@@ -444,11 +445,16 @@ def get_toa_fn(dem_fn):
         #Find toa.tif in top-level dir
         toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
         if not toa_fn:
-            cmd = ['toa.sh', dem_dir]
-            print(cmd)
-            subprocess.call(cmd)
-            toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        toa_fn = toa_fn[0]
+            ortho_fn = glob.glob(os.path.join(dem_dir, '*ortho*.tif'))
+            if ortho_fn:
+                cmd = ['toa.sh', dem_dir]
+                print(cmd)
+                subprocess.call(cmd)
+                toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+        if toa_fn:
+            toa_fn = toa_fn[0]
+        else:
+            toa_fn = None
     return toa_fn
 
 def get_toa_ds(dem_fn):
@@ -493,7 +499,7 @@ def main():
     writeall = True
 
     mask_glaciers = True
-    if args.no_icemask:
+    if args.no_icemask or args.filter == 'none':
         mask_glaciers = False
 
     #Define top-level directory containing DEM
@@ -510,7 +516,7 @@ def main():
     dem_dt = timelib.fn_getdatetime(dem_fn)
 
     #This will hold datasets for memwarp and output processing
-    ds_dict = OrderedDict() 
+    ds_dict = {}
     ds_dict['dem'] = dem_ds
 
     ds_dict['lulc'] = None
@@ -562,9 +568,7 @@ def main():
         ds_dict['toa'] = toa_ds  
 
     #Cull all of the None ds from the ds_dict
-    for k,v in ds_dict.items():
-        if v is None:
-            del ds_dict[k]
+    ds_dict = {k: v for k, v in ds_dict.items() if v is not None}
 
     #Warp all masks to DEM extent/res
     #Note: use cubicspline here to avoid artifacts with negative values

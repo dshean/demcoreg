@@ -5,7 +5,7 @@ Library of functions that can be used for co-registration of raster data
 
 For many situations, ASP pc_align ICP co-registration is superior to these approaches. See pc_align_wrapper.sh
 """
-
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -99,7 +99,7 @@ def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
         plt.title('Sum of Absolute Differences')
         plt.imshow(m)
         plt.scatter(*sp_argmax[::-1])
-        plt.show()
+        #plt.show()
 
     return m, int_offset, sp_offset
 
@@ -186,45 +186,6 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
 
     return m, int_offset, sp_offset, fig
 
-def bin_stats(x, y, stat='median', nbins=360):
-    import scipy.stats
-    #bin_range = (x.min(), x.max())
-    bin_range = (0., 360.)
-    bin_width = (bin_range[1] - bin_range[0]) / nbins
-    print("Computing 1-degree bin statistics: %s" % stat)
-    bin_stat, bin_edges, bin_number = scipy.stats.binned_statistic(x, y, \
-            statistic=stat, bins=nbins, range=bin_range)
-    bin_centers = bin_edges[:-1] + bin_width/2.
-    bin_stat = np.ma.masked_invalid(bin_stat)
-   
-    """
-    #Mask bins in grid directions, can potentially contain biased stats
-    badbins = [0, 45, 90, 180, 225, 270, 315]
-    bin_stat = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_stat)
-    bin_edges = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_edges)
-    """
-
-    #Generate plots
-    if False:
-        plt.figure()
-        #Need to pull out original values for each bin
-        #Loop through unique bin numbers, pull out original values into list of lists
-        #plt.boxplot(bin_stat, sym='')
-        plt.xlim(*bin_range)
-        plt.xticks(np.arange(bin_range[0],bin_range[1],30))
-        plt.ylabel('dh/tan(slope) (m)')
-        plt.xlabel('Aspect (1-deg bins)')
-
-        plt.figure()
-        plt.bar(bin_centers, bin_count)
-        plt.xlim(*bin_range)
-        plt.xticks(np.arange(bin_range[0],bin_range[1],30))
-        plt.ylabel('Count')
-        plt.xlabel('Aspect (1-deg bins)')
-        plt.show()
-
-    return bin_stat, bin_edges, bin_centers
-
 #Function for fitting Nuth and Kaab (2011)
 def nuth_func(x, a, b, c):
     y = a * np.cos(np.deg2rad(b-x)) + c
@@ -233,7 +194,7 @@ def nuth_func(x, a, b, c):
     return y
 
 #This is the Nuth and Kaab (2011) method
-def compute_offset_nuth(dh, slope, aspect):
+def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     """Compute horizontal offset between input rasters using Nuth and Kaab [2011] (nuth) method
     """
     import scipy.optimize as optimization
@@ -243,7 +204,13 @@ def compute_offset_nuth(dh, slope, aspect):
     #c_seed = (mean_dh/np.tan(np.deg2rad(mean_slope))) 
     
     med_dh = malib.fast_median(dh)
+    if dh.count() < min_count:
+        sys.exit("Not enough dh samples")
+
     med_slope = malib.fast_median(slope)
+    if slope.count() < min_count:
+        sys.exit("Not enough dh samples")
+
     c_seed = (med_dh/np.tan(np.deg2rad(med_slope))) 
 
     x0 = np.array([0.0, 0.0, c_seed])
@@ -288,23 +255,34 @@ def compute_offset_nuth(dh, slope, aspect):
     genplot(xdata_clip, ydata_clip, fit) 
     """
     #Compute robust statistics for 1-degree bins
-    bin_count, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='count')
-    bin_med, bin_edges, bin_centers = bin_stats(xdata, ydata, stat='median')
+    nbins = 360
+    bin_range = (0., 360.)
+    bin_count, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='count', \
+            nbins=nbins, bin_range=bin_range)
+    bin_med, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='median', \
+            nbins=nbins, bin_range=bin_range)
+    #Started implementing this for more generic binning, needs testing
+    #bin_count, x_bin_edges, y_bin_edges = malib.get_2dhist(xdata, ydata, \
+    #        xlim=bin_range, nbins=(nbins, nbins), stat='count')
 
-    #Remove any empty bins
-    #idx = ~(np.ma.getmaskarray(bin_med))
+    """
+    #Mask bins in grid directions, can potentially contain biased stats
+    badbins = [0, 45, 90, 180, 225, 270, 315]
+    bin_stat = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_stat)
+    bin_edges = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_edges)
+    """
 
     #Remove any bins with only a few points
-    min_count = 9
-    idx = (bin_count.filled(0) >= min_count) 
+    min_bin_count = 9
+    idx = (bin_count.filled(0) >= min_bin_count) 
 
     bin_med = bin_med[idx]
     bin_centers = bin_centers[idx]
 
     fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
-    f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
-    plt.show()
-    #genplot(xdata, ydata, fit) 
+    f = None
+    if plot:
+        f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
 
     print(fit)
     return fit, f

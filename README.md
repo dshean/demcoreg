@@ -33,20 +33,27 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 
 http://demcoreg.readthedocs.io
 
-## Installation
+## Simple installation
 
-Install the latest release from PyPI:
+To install the latest release from PyPI (does not include latest updates and bugfixes):
 
-    pip install demcoreg 
+    `pip install demcoreg`
 
-**Note**: by default, this will deploy executable scripts in /usr/local/bin
-
-### Building from source
+### Building from latest source (recommended)
 
 Clone the repository and install:
 
-    git clone https://github.com/dshean/demcoreg.git
-    pip install -e demcoreg
+    `git clone https://github.com/dshean/demcoreg.git`
+
+If you want to copy exectuable scripts to a local directory (e.g., /usr/local/bin), uncomment the scripts lines in demcoreg/setup.py.  Alternatively, append the demcoreg subdirectory to your PATH: 
+
+    `export PATH=${PATH}:$PWD/demcoreg/demcoreg`
+
+To make this permanent, add that line to your shell config file (e.g., ~/.bashrc), but replace the $PWD with the full path to the cloned demcoreg repository.
+
+Then run:
+
+    `pip install -e demcoreg`
 
 The -e flag ("editable mode", setuptools "develop mode") will allow you to modify source code and immediately see changes.
 
