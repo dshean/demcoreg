@@ -23,7 +23,7 @@ nlcd_fn='nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_ed
 
 if [ ! -e $nlcd_zip_fn ] ; then
     echo "Downloading $nlcd_zip_fn"
-    url='http://www.landfire.gov/bulk/downloadfile.php?TYPE=nlcd2011&FNAME=nlcd_2011_landcover_2011_edition_2014_10_10.zip'
+    url='https://landfire.cr.usgs.gov/MRLC/NLCD/nlcd_2011_landcover_2011_edition_2014_10_10.zip'
     wget -O $nlcd_zip_fn $url 
 fi
 
