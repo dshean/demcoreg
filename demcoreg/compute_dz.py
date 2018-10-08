@@ -60,6 +60,12 @@ def main():
         dem2_fn_base = re.sub(adj, '', os.path.splitext(dem2_fn)[0]) 
 
         #Attempt to load ordinal timestamp arrays (for mosaics) if present
+        """
+        import glob
+        t1_fn = glob.glob(dem1_fn_base+'*_ts*.tif')
+        t2_fn = glob.glob(dem1_fn_base+'*_ts*.tif')
+        t_unit = 'year'
+        """
         t1_fn = dem1_fn_base+'_ts.tif'
         t2_fn = dem2_fn_base+'_ts.tif'
         t_unit = 'day'
@@ -69,6 +75,7 @@ def main():
             t1_fn = dem1_fn_base+'index_ts.tif'
             t2_fn = dem2_fn_base+'index_ts.tif'
             t_unit = 'year'
+        print(t1_fn, t2_fn)
         if os.path.exists(t1_fn) and os.path.exists(t2_fn):
             fn_list.extend([t1_fn, t2_fn])
         else:
