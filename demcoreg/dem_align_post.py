@@ -102,11 +102,12 @@ print("Isolating x, y, z offsets")
 xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split('_'))[-4:-1]], dtype=float) for fn in fn_list])
 print("Extracting center coords")
 t_srs = geolib.hma_aea_srs
+#t_srs = geolib.conus_aea_srs
 #t_srs = geolib.wgs_srs
 ll = np.array([geolib.get_center(gdal.Open(fn), t_srs=t_srs) for fn in fn_list])
 cy = ll[:,1]
 cx = ll[:,0]
-print(xyz.size)
+print(xyz.shape[0])
 m = np.sqrt(np.sum(np.square(xyz), axis=1))
 
 #Throw out gross outliers
@@ -123,7 +124,7 @@ if filter:
     xyz = xyz[~idx]
     cx = cx[~idx]
     cy = cy[~idx]
-    print(xyz.size)
+    print(xyz.shape[0])
 
 x = xyz[:,0]
 y = xyz[:,1]
