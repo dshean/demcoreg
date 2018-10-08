@@ -199,6 +199,7 @@ def main2(args):
     print("\nReference: %s" % dem1_fn)
     print("Source: %s" % dem2_fn)
     print("Mode: %s" % mode)
+    print("Valid Surface Type Filter: %s" % filter)
     print("Output: %s\n" % outprefix)
     
     dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
