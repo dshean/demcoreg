@@ -201,7 +201,11 @@ def main2(args):
     print("Mode: %s" % mode)
     print("Output: %s\n" % outprefix)
 
-    dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
+    dem2_ds = gdal.Open(dem2_fn, gdal.GA_Update)
+    #open source dataset in update mode, avoids File not open for writing and
+    #avoids program to crash in case of a very big dataset, after running for
+    #several iterations as mentioned in the link
+    #https://github.com/mapbox/rasterio/issues/307
     #Often the "ref" DEM is high-res lidar or similar
     #This is a shortcut to resample to match "source" DEM
     dem1_ds = warplib.memwarp_multi_fn([dem1_fn,], res=dem2_ds, extent=dem2_ds, t_srs=dem2_ds, r='cubic')[0]
@@ -298,7 +302,9 @@ def main2(args):
             static_mask = np.ma.getmaskarray(diff_euler_align)
         #This can fail due to shifts - need to recompute
         #IndexError: boolean index did not match indexed array along dimension 0; dimension is 2244 but corresponding boolean dimension is 2246
-        diff_euler_align_compressed = diff_euler_align[~static_mask]
+        #added this for above mentioned boolean index error
+        static_mask_final = get_mask(dem2_clip_ds_align,dem2_fn, filter=filter)
+        diff_euler_align_compressed = diff_euler_align[~static_mask_final]
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 
         #Fit plane to residuals and remove
@@ -309,7 +315,7 @@ def main2(args):
             #Note that the origmask=False will compute vals for all x and y indices, which is what we want
             #Should offer option for polynomial of arbitrary order
             #Also, want a better robust fit - maybe throw out more outliers
-            vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask), \
+            vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask_final), \
                     gt, perc=(12.5, 87.5), origmask=False)
             #Remove planar offset from difference map
             diff_euler_align -= vals
@@ -321,7 +327,7 @@ def main2(args):
             dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
             if not apply_mask:
                 static_mask = np.ma.getmaskarray(diff_euler_align)
-            diff_euler_align_compressed = diff_euler_align[~static_mask]
+            diff_euler_align_compressed = diff_euler_align[~static_mask_final]
             diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
             print("Creating fitplane plot")
             fig, ax = plt.subplots(figsize=(6, 6))
@@ -408,7 +414,6 @@ def main2(args):
         dst_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
         print("Writing out figure: %s" % dst_fn)
         f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-
         #Removing residual planar tilt can introduce additional slope/aspect dependent offset
         #Want to run another round of main dem_align after removing planar tilt
         if tiltcorr:
