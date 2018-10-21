@@ -37,7 +37,7 @@ def getparser():
     parser.add_argument('-tiltcorr', action='store_true', \
             help='After preliminary translation, fit plane to residual elevation offsets and remove')
     parser.add_argument('-tol', type=float, default=0.02, \
-            help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM') 
+            help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM')
     parser.add_argument('-max_offset', type=float, default=100, \
             help='Maximum expected horizontal offset in meters')
     parser.add_argument('-max_iter', type=int, default=10, \
@@ -70,7 +70,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
     dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
             res='max', extent='intersection', t_srs=dem2_ds, r='cubic')
 
-    #Compute size of NCC and SAD search window in pixels 
+    #Compute size of NCC and SAD search window in pixels
     res = float(geolib.get_res(dem1_clip_ds, square=True)[0])
     max_offset_px = (max_offset_m/res) + 1
     #print(max_offset_px)
@@ -145,7 +145,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         fit_param, fig = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect, plot=False)
         #fit_param[0] is magnitude of shift vector
         #fit_param[1] is direction of shift vector
-        #fit_param[2] is mean bias divided by tangent of mean slope 
+        #fit_param[2] is mean bias divided by tangent of mean slope
         #print(fit_param)
         dx = fit_param[0]*np.sin(np.deg2rad(fit_param[1]))
         dy = fit_param[0]*np.cos(np.deg2rad(fit_param[1]))
@@ -162,7 +162,7 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         dst_fn = outprefix+'_med%0.1f.tif' % dz
         iolib.writeGTiff(dem2_orig + dz, dst_fn, dem2_ds)
         sys.exit()
-    #Note: minus signs here since we are computing dz=(src-ref), but adjusting src 
+    #Note: minus signs here since we are computing dz=(src-ref), but adjusting src
     return -dx, -dy, -dz, static_mask, fig
 
 #Defined a second main to allow recursion with new arguments for second run
@@ -184,7 +184,7 @@ def main2(args):
 
     #Maximum number of iterations
     max_n = args.max_iter
-    
+
     outdir = args.outdir
     if outdir is None:
         outdir = os.path.splitext(dem2_fn)[0] + '_dem_align'
@@ -193,7 +193,7 @@ def main2(args):
         os.makedirs(outdir)
 
     outprefix = '%s_%s' % (os.path.splitext(os.path.split(dem2_fn)[-1])[0], \
-            os.path.splitext(os.path.split(dem1_fn)[-1])[0]) 
+            os.path.splitext(os.path.split(dem1_fn)[-1])[0])
     outprefix = os.path.join(outdir, outprefix)
 
     print("\nReference: %s" % dem1_fn)
@@ -201,8 +201,12 @@ def main2(args):
     print("Mode: %s" % mode)
     print("Valid Surface Type Filter: %s" % filter)
     print("Output: %s\n" % outprefix)
-    
-    dem2_ds = gdal.Open(dem2_fn, gdal.GA_ReadOnly)
+
+    dem2_ds = gdal.Open(dem2_fn, gdal.GA_Update)
+    #open source dataset in update mode, avoids File not open for writing and
+    #avoids program to crash in case of a very big dataset, after running for
+    #several iterations as mentioned in the link
+    #https://github.com/mapbox/rasterio/issues/307
     #Often the "ref" DEM is high-res lidar or similar
     #This is a shortcut to resample to match "source" DEM
     dem1_ds = warplib.memwarp_multi_fn([dem1_fn,], res=dem2_ds, extent=dem2_ds, t_srs=dem2_ds, r='cubic')[0]
@@ -252,7 +256,7 @@ def main2(args):
             print("Applying planar tilt correction")
             gt = dem2_ds_align.GetGeoTransform()
             #Need to compute diff_euler here
-            #Copy portions of compute_offset, create new function 
+            #Copy portions of compute_offset, create new function
             vals, resid, coeff = geolib.ma_fitplane(diff_euler_align, gt, perc=(4, 96))
             dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
         """
@@ -268,13 +272,13 @@ def main2(args):
 
     #String to append to output filenames
     xyz_shift_str_cum = '_%s_x%+0.2f_y%+0.2f_z%+0.2f' % (mode, dx_total, dy_total, dz_total)
-    if tiltcorr: 
+    if tiltcorr:
         xyz_shift_str_cum += "_tiltcorr"
 
     #Compute original elevation difference
     if True:
         dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
-                res='max', extent='intersection', t_srs=dem2_ds, r='cubic') 
+                res='max', extent='intersection', t_srs=dem2_ds, r='cubic')
         dem1_orig = iolib.ds_getma(dem1_clip_ds, 1)
         dem2_orig = iolib.ds_getma(dem2_clip_ds, 1)
         diff_euler_orig = dem2_orig - dem1_orig
@@ -285,13 +289,13 @@ def main2(args):
 
         #Write out original eulerian difference map
         print("Writing out original euler difference map for common intersection before alignment")
-        dst_fn = outprefix + '_orig_dz_eul.tif' 
+        dst_fn = outprefix + '_orig_dz_eul.tif'
         iolib.writeGTiff(diff_euler_orig, dst_fn, dem1_clip_ds)
-        
+
     #Compute final elevation difference
     if True:
         dem1_clip_ds_align, dem2_clip_ds_align = warplib.memwarp_multi([dem1_ds, dem2_ds_align], \
-                res='max', extent='intersection', t_srs=dem2_ds_align, r='cubic') 
+                res='max', extent='intersection', t_srs=dem2_ds_align, r='cubic')
         dem1_align = iolib.ds_getma(dem1_clip_ds_align, 1)
         dem2_align = iolib.ds_getma(dem2_clip_ds_align, 1)
         diff_euler_align = dem2_align - dem1_align
@@ -299,7 +303,9 @@ def main2(args):
             static_mask = np.ma.getmaskarray(diff_euler_align)
         #This can fail due to shifts - need to recompute
         #IndexError: boolean index did not match indexed array along dimension 0; dimension is 2244 but corresponding boolean dimension is 2246
-        diff_euler_align_compressed = diff_euler_align[~static_mask]
+        #added this for above mentioned boolean index error
+        static_mask_final = get_mask(dem2_clip_ds_align,dem2_fn, filter=filter)
+        diff_euler_align_compressed = diff_euler_align[~static_mask_final]
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 
         #Fit plane to residuals and remove
@@ -307,10 +313,10 @@ def main2(args):
             print("Applying planar tilt correction")
             gt = dem1_clip_ds_align.GetGeoTransform()
             #Need to apply the mask here, so we're only fitting over static surfaces
-            #Note that the origmask=False will compute vals for all x and y indices, which is what we want 
+            #Note that the origmask=False will compute vals for all x and y indices, which is what we want
             #Should offer option for polynomial of arbitrary order
             #Also, want a better robust fit - maybe throw out more outliers
-            vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask), \
+            vals, resid, coeff = geolib.ma_fitplane(np.ma.array(diff_euler_align, mask=static_mask_final), \
                     gt, perc=(12.5, 87.5), origmask=False)
             #Remove planar offset from difference map
             diff_euler_align -= vals
@@ -318,11 +324,11 @@ def main2(args):
             #Note: dimensions of ds and vals will be different as vals are computed for clipped intersection
             #Recompute planar offset for dem2_ds_align extent
             xgrid, ygrid = geolib.get_xy_grids(dem2_ds_align)
-            vals = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2] 
+            vals = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
             dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
             if not apply_mask:
                 static_mask = np.ma.getmaskarray(diff_euler_align)
-            diff_euler_align_compressed = diff_euler_align[~static_mask]
+            diff_euler_align_compressed = diff_euler_align[~static_mask_final]
             diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
             print("Creating fitplane plot")
             fig, ax = plt.subplots(figsize=(6, 6))
@@ -336,22 +342,22 @@ def main2(args):
             dst_fn1 = outprefix + '%s_align_dz_eul_fitplane.png' % xyz_shift_str_cum
             print("Writing out figure: %s" % dst_fn1)
             fig.savefig(dst_fn1, dpi=300, bbox_inches='tight', pad_inches=0.1)
-   
+
         #Compute higher-order fits?
         #Could also attempt to model along-track and cross-track artifacts
 
         #Write out aligned eulerian difference map for clipped extent with vertial offset removed
         dst_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum
-        print("Writing out aligned difference map with median vertical offset removed") 
-        iolib.writeGTiff(diff_euler_align, dst_fn, dem1_clip_ds) 
-          
+        print("Writing out aligned difference map with median vertical offset removed")
+        iolib.writeGTiff(diff_euler_align, dst_fn, dem1_clip_ds)
+
     #Write out aligned dem_2 with vertial offset removed
     if True:
         dst_fn2 = outprefix + '%s_align.tif' % xyz_shift_str_cum
         print("Writing out shifted dem2 with median vertical offset removed: %s" % dst_fn2)
         #Might be cleaner way to write out MEM ds directly to disk
         dem2_align = iolib.ds_getma(dem2_ds_align)
-        iolib.writeGTiff(dem2_align, dst_fn2, dem2_ds_align) 
+        iolib.writeGTiff(dem2_align, dst_fn2, dem2_ds_align)
         dem2_ds_align = None
 
     #Create output plot
@@ -359,7 +365,7 @@ def main2(args):
         print("Creating final plot")
         dem1_hs = geolib.gdaldem_mem_ma(dem1_orig, dem1_clip_ds, returnma=True)
         dem2_hs = geolib.gdaldem_mem_ma(dem2_orig, dem2_clip_ds, returnma=True)
-        f, axa = plt.subplots(2, 3, figsize=(11, 8.5))          
+        f, axa = plt.subplots(2, 3, figsize=(11, 8.5))
         for ax in axa.ravel()[:-1]:
             ax.set_facecolor('k')
             pltlib.hide_ticks(ax)
@@ -397,9 +403,9 @@ def main2(args):
         #before_str = 'Before\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((3,4,5,6))])
         #after_str = 'After\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((3,4,5,6))])
         before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((5,6))])
-        axa[1,2].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,2].transAxes) 
+        axa[1,2].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,2].transAxes)
         after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((5,6))])
-        axa[1,2].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,2].transAxes) 
+        axa[1,2].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,2].transAxes)
 
         suptitle = '%s\nx: %+0.2fm, y: %+0.2fm, z: %+0.2fm' % (os.path.split(outprefix)[-1], dx_total, dy_total, dz_total)
         f.suptitle(suptitle)
@@ -409,8 +415,7 @@ def main2(args):
         dst_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
         print("Writing out figure: %s" % dst_fn)
         f.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
-       
-        #Removing residual planar tilt can introduce additional slope/aspect dependent offset 
+        #Removing residual planar tilt can introduce additional slope/aspect dependent offset
         #Want to run another round of main dem_align after removing planar tilt
         if tiltcorr:
             print("\n Rerunning after applying tilt correction \n")
