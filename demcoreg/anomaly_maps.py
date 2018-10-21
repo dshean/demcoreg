@@ -63,7 +63,8 @@ for n, dem_fn in enumerate(dem_fn_list):
     #dem_clim = malib.calcperc(stack.ma_stack, (2,98))
     #dem_hs_fn = os.path.splitext(dem_fn)[0]+'_hs_az315.tif'
     #dem_hs = iolib.fn_getma(dem_hs_fn)
-    dem_hs = geolib.gdaldem_mem_ma(dem, dem_ds, returnma=True)
+    #dem_hs = geolib.gdaldem_mem_ma(dem, dem_ds, returnma=True)
+    dem_hs = geolib.gdaldem_mem_ds(dem_ds, returnma=True)
     #dt = timelib.fn_getdatetime(dem_fn)
     dt = stack.date_list[n]
     if dt is not None:
