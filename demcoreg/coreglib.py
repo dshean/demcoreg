@@ -32,7 +32,7 @@ def apply_xy_shift(ds, dx, dy, createcopy=True):
 
     #Update ds Geotransform
     if createcopy:
-        ds_align = iolib.mem_drv.CreateCopy('', ds, 1)
+        ds_align = iolib.mem_drv.CreateCopy('', ds, 0)
     else:
         #Update in place, assume ds is opened as GA_Update
         ds_align = ds
@@ -40,9 +40,12 @@ def apply_xy_shift(ds, dx, dy, createcopy=True):
     return ds_align
 
 def apply_z_shift(ds, dz, createcopy=True):
-    print("Z shift: ", dz)
+    if isinstance(dz, np.ndarray):
+        print("Z shift offset array mean: ", dz.mean())
+    else:
+        print("Z shift offset: ", dz) 
     if createcopy:
-        ds_shift = iolib.mem_drv.CreateCopy('', ds, 1)
+        ds_shift = iolib.mem_drv.CreateCopy('', ds, 0)
     else:
         ds_shift = ds
     b = ds_shift.GetRasterBand(1)
@@ -273,19 +276,22 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     """
 
     #Remove any bins with only a few points
-    min_bin_count = 9
-    idx = (bin_count.filled(0) >= min_bin_count) 
-
+    min_bin_sample_count = 9
+    idx = (bin_count.filled(0) >= min_bin_sample_count) 
     bin_med = bin_med[idx]
     bin_centers = bin_centers[idx]
 
-    fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
-    f = None
-    if plot:
-        f = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
+    fit = None
+    fit_fig = None
 
+    #Need at least 3 valid bins to fit 3 parameters in nuth_func
+    min_bin_count = 3
+    if len(bin_med) >= min_bin_count:
+        fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
+        if plot:
+            fit_fig = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
     print(fit)
-    return fit, f
+    return fit, fit_fig
 
 def genplot(x, y, fit, xdata=None, ydata=None, maxpts=10000):
     bin_range = (0, 360)
