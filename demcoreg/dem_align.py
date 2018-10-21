@@ -213,11 +213,6 @@ def main2(args):
     print("Valid Surface Type Filter: %s" % filter)
     print("Output: %s\n" % outprefix)
 
-    #dem2_ds = gdal.Open(dem2_fn, gdal.GA_Update)
-    #open source dataset in update mode, avoids File not open for writing and
-    #avoids program to crash in case of a very big dataset, after running for
-    #several iterations as mentioned in the link
-    #https://github.com/mapbox/rasterio/issues/307
     dem2_ds = gdal.Open(dem2_fn)
     #Create a copy to be updated in place
     dem2_ds_align = iolib.mem_drv.CreateCopy('', dem2_ds, 0)
