@@ -8,22 +8,39 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from osgeo import gdal
-from pygeotools.lib import geolib, malib
+from pygeotools.lib import geolib, malib, iolib
+
+#out_fn_prefix = 'dem_align_aster'
+#out_fn_prefix = 'dem_align_at_wv3'
+#out_fn_prefix = 'dem_align_all'
+out_fn_prefix = 'dem_align'
 
 def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
     cmean = np.mean([x,y,z], axis=1)
+    cstd = np.std([x,y,z], axis=1)
     cmed = np.median([x,y,z], axis=1)
-
+    cnmad = malib.mad([x,y,z], axis=1)
+    x_corr = x - cmean[0]
+    y_corr = y - cmean[1]
+    z_corr = z - cmean[2]
+   
     ce90 = geolib.CE90(x,y)
+    ce90_corr = geolib.CE90(x_corr,y_corr)
     le90 = geolib.LE90(z)
+    le90_corr = geolib.LE90(z_corr)
+
     coefs = [ce90, ce90, le90]
-    maxdim = np.ceil(np.max([np.max(np.abs([x, y, z])), ce90, le90]))
+    #maxdim = np.ceil(np.max([np.max(np.abs([x, y, z])), ce90, le90]))
+    maxdim = np.ceil(np.max([np.percentile(np.abs([x, y, z]), 99), ce90, le90]))
     
     if orthogonal_fig:
         from matplotlib.patches import Ellipse
-        fig_ortho = plt.figure(figsize=(10,4))
+        fig_ortho = plt.figure(figsize=(10,5))
         #fig_ortho = plt.figure()
-        title='Co-registration Translation Vector Components\nn=%i, mean: (%0.2f, %0.2f, %0.2f)\nCE90: %0.2f, LE90: %0.2f' % (x.shape[0], cmean[0], cmean[1], cmean[2], ce90, le90)
+        title = 'Co-registration Translation Vector Components, n=%i\n' % x.shape[0]
+        title += 'mean: (%0.2f, %0.2f, %0.2f), std: (%0.2f, %0.2f, %0.2f)\n' % (tuple(cmean) + tuple(cstd))
+        title += 'med: (%0.2f, %0.2f, %0.2f), nmad: (%0.2f, %0.2f, %0.2f)\n' % (tuple(cmed) + tuple(cnmad))
+        title += 'CE90: %0.2f (Bias-corrected: %0.2f), LE90: %0.2f (Bias-corrected: %0.2f)' % (ce90, ce90_corr, le90, le90_corr)
         plt.suptitle(title) 
 
         m = '.'
@@ -74,12 +91,15 @@ def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
         plt.tight_layout()
 
         #Note: postscript doesn't properly handle tansparency
-        fig_fn = 'dem_align_translation_vec_local_meters_orthogonal.pdf'
+        fig_fn = '%s_translation_vec_local_meters_orthogonal.pdf' % out_fn_prefix
         plt.savefig(fig_fn, dpi=600, bbox_inches='tight')
 
 def make_map(x, y, z, cx, cy):
     f, axa = plt.subplots(3, sharex=True, sharey=True, figsize=(5,10))
-    vmin, vmax = (-15, 15)
+    axa[0].set_aspect('equal')
+    maxdim = np.ceil(np.percentile(np.abs([x, y, z]), 99))
+    #vmin, vmax = (-15, 15)
+    vmin, vmax = (-maxdim, maxdim)
     s=5
     cmap='RdYlBu'
     opt={'edgecolor':'k', 'vmin':vmin, 'vmax':vmax, 'cmap':cmap, 's':s, 'lw':0.3}
@@ -91,13 +111,15 @@ def make_map(x, y, z, cx, cy):
     axa[2].scatter(cx, cy, c=z, **opt) 
     axa[2].set_title("Z-offset required to align")
     f.colorbar(sc, ax=axa.ravel().tolist())
-    fig_fn = 'dem_align_map.png'
+    fig_fn = '%s_map.png' % out_fn_prefix
     f.savefig(fig_fn, dpi=300, bbox_inches='tight')
 
 print("Building fn_list")
 #fn_list = glob.glob('*dem_align/*align.tif')
+#ll *tif | grep 'alongtrack/WV03' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#'
 #cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
 fn_list = sys.argv[1:]
+fn_list = iolib.fn_list_valid(fn_list)
 print("Isolating x, y, z offsets")
 xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split('_'))[-4:-1]], dtype=float) for fn in fn_list])
 print("Extracting center coords")
@@ -120,7 +142,7 @@ if filter:
     thresh = 90
     idx = (m > thresh)
     bad_fn = np.array(fn_list)[idx]
-    np.savetxt('bad_fn.txt', bad_fn, fmt='%s')
+    np.savetxt('%s_bad_fn.txt' % out_fn_prefix, bad_fn, fmt='%s')
     xyz = xyz[~idx]
     cx = cx[~idx]
     cy = cy[~idx]
