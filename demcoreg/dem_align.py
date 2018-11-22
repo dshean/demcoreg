@@ -45,7 +45,7 @@ def getparser():
     parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
 
-def get_mask(ds, dem_fn=None, filter='not_forest', mask_glaciers=True, bareground_thresh=60):
+def get_mask(ds, dem_fn=None, filter='not_forest', mask_glaciers=True, toa_mask=False, bareground_thresh=60):
     #This logic needs to be cleaned up
     if filter != 'none':
         #Mask glaciers, vegetated slopes
@@ -53,14 +53,15 @@ def get_mask(ds, dem_fn=None, filter='not_forest', mask_glaciers=True, baregroun
     else:
         #Mask glaciers only
         static_mask = dem_mask.get_icemask(ds)
-    if dem_fn is not None:
-        #Top-of-atmosphere reflectance threshold (requires orthoimage and output from toa.sh)
-        toa_fn = dem_mask.get_toa_fn(dem_fn)
-        #toa_fn = None
-        if toa_fn is not None:
-            toa_ds = warplib.memwarp_multi_fn([toa_fn,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]
-            toa_mask = dem_mask.get_toa_mask(toa_ds)
-            static_mask = np.logical_and(static_mask, toa_mask)
+    if toa_mask:
+        if dem_fn is not None:
+            #Top-of-atmosphere reflectance threshold (requires orthoimage and output from toa.sh)
+            toa_fn = dem_mask.get_toa_fn(dem_fn)
+            #toa_fn = None
+            if toa_fn is not None:
+                toa_ds = warplib.memwarp_multi_fn([toa_fn,], res=ds, extent=ds, t_srs=ds, r='cubicspline')[0]
+                toa_mask = dem_mask.get_toa_mask(toa_ds)
+                static_mask = np.logical_and(static_mask, toa_mask)
     #Return final mask, ready to be applied
     return ~(static_mask)
 
@@ -119,6 +120,9 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         #rmax = diff_stats[8]
         diff_euler = np.ma.masked_outside(diff_euler, rmin, rmax)
         #Should also apply to original dem1 and dem2 for sad and ncc
+
+    #Add absolute dz filter
+    #Add slope filter
 
     print("Computing sub-pixel offset between DEMs using mode: %s" % mode)
 
@@ -198,6 +202,7 @@ def main2(args):
 
     outdir = args.outdir
     if outdir is None:
+        #outdir = os.path.splitext(dem2_fn)[0] + '_dem_align_lt1.5m_err'
         outdir = os.path.splitext(dem2_fn)[0] + '_dem_align'
 
     if not os.path.exists(outdir):
@@ -299,7 +304,7 @@ def main2(args):
         diff_euler_orig = dem2_orig - dem1_orig
         if not apply_mask:
             static_mask_orig = np.ma.getmaskarray(diff_euler_orig)
-        diff_euler_orig_compressed = diff_euler_orig[~static_mask_orig]
+        diff_euler_orig_compressed = diff_euler_orig[~static_mask_orig].compressed()
         diff_euler_orig_stats = np.array(malib.print_stats(diff_euler_orig_compressed))
 
         #Write out original eulerian difference map
@@ -325,7 +330,7 @@ def main2(args):
         static_mask = get_mask(dem2_clip_ds_align, dem2_fn, filter=filter)
         dem2_clip_ds_align = None
         static_mask = np.ma.getmaskarray(np.ma.array(diff_euler_align, mask=static_mask))
-        diff_euler_align_compressed = diff_euler_align[~static_mask]
+        diff_euler_align_compressed = diff_euler_align[~static_mask].compressed()
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 
         #Fit plane to residuals and remove
@@ -348,7 +353,7 @@ def main2(args):
             dem2_ds_align = coreglib.apply_z_shift(dem2_ds_align, -vals, createcopy=False)
             if not apply_mask:
                 static_mask = np.ma.getmaskarray(diff_euler_align)
-            diff_euler_align_compressed = diff_euler_align[~static_mask]
+            diff_euler_align_compressed = diff_euler_align[~static_mask].compressed()
             diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
             print("Creating fitplane plot")
             fig, ax = plt.subplots(figsize=(6, 6))
@@ -434,7 +439,8 @@ def main2(args):
 
         fig_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
         print("Writing out figure: %s" % fig_fn)
-        f.savefig(fig_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+        #f.savefig(fig_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+        f.savefig(fig_fn, dpi=300)
 
     #Removing residual planar tilt can introduce additional slope/aspect dependent offset
     #Want to run another round of main dem_align after removing planar tilt
