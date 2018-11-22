@@ -434,7 +434,7 @@ def get_toa_fn(dem_fn):
     toa_fn = None
     #Original approach, assumes DEM file is in *00/dem_*/*DEM_32m.tif
     #dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
-    dem_dir_list = os.path.split(os.path.abspath(dem_fn))[0].split(os.sep)
+    dem_dir_list = os.path.split(os.path.realpath(dem_fn))[0].split(os.sep)
     import re
     #Get index of the top level pair directory containing toa (WV02_20140514_1030010031114100_1030010030896000)
     r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)]
