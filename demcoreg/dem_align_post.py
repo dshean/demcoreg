@@ -12,8 +12,16 @@ from pygeotools.lib import geolib, malib, iolib
 
 #out_fn_prefix = 'dem_align_aster'
 #out_fn_prefix = 'dem_align_at_wv3'
-#out_fn_prefix = 'dem_align_all'
+#out_fn_prefix = 'dem_align_qb'
+#out_fn_prefix = 'dem_align_noqb'
 out_fn_prefix = 'dem_align'
+
+#Throw out gross outliers
+filter=True
+#WV/GE
+outlier_mag_thresh = 20 
+#ASTER
+#outlier_mag_thresh = 90
 
 def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
     cmean = np.mean([x,y,z], axis=1)
@@ -117,6 +125,7 @@ def make_map(x, y, z, cx, cy):
 print("Building fn_list")
 #fn_list = glob.glob('*dem_align/*align.tif')
 #ll *tif | grep 'alongtrack/WV03' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#'
+#ll *tif | grep 'QB02' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#'
 #cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
 fn_list = sys.argv[1:]
 fn_list = iolib.fn_list_valid(fn_list)
@@ -132,17 +141,16 @@ cx = ll[:,0]
 print(xyz.shape[0])
 m = np.sqrt(np.sum(np.square(xyz), axis=1))
 
-#Throw out gross outliers
-filter=True
 if filter:
     stats = malib.print_stats(m)
     print(stats)
-    f=3.5
-    #thresh = stats[5]+stats[6]*f
-    thresh = 90
-    idx = (m > thresh)
+    #f=3.5
+    #outlier_mag_thresh = stats[5]+stats[6]*f
+    idx = (m > outlier_mag_thresh)
     bad_fn = np.array(fn_list)[idx]
     np.savetxt('%s_bad_fn.txt' % out_fn_prefix, bad_fn, fmt='%s')
+    good_fn = np.array(fn_list)[~idx]
+    np.savetxt('%s_good_fn.txt' % out_fn_prefix, good_fn, fmt='%s')
     xyz = xyz[~idx]
     cx = cx[~idx]
     cy = cy[~idx]
