@@ -299,11 +299,14 @@ def main2(args):
         #Needed for plotting
         dem1_hs = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='hillshade', returnma=True)
         dem2_hs = geolib.gdaldem_mem_ds(dem2_clip_ds, processing='hillshade', returnma=True)
-        dem2_clip_ds = None
         res = float(geolib.get_res(dem1_clip_ds, square=True)[0])
         diff_euler_orig = dem2_orig - dem1_orig
         if not apply_mask:
             static_mask_orig = np.ma.getmaskarray(diff_euler_orig)
+        #Only compute stats over valid surfaces
+        #static_mask_orig = get_mask(dem2_clip_ds, dem2_fn, filter=filter)
+        static_mask_orig = np.logical_or(np.ma.getmaskarray(diff_euler_orig), static_mask_orig)
+        #For some reason, ASTER DEM diff have a spike near the 0 bin, could be an issue with masking?
         diff_euler_orig_compressed = diff_euler_orig[~static_mask_orig].compressed()
         diff_euler_orig_stats = np.array(malib.print_stats(diff_euler_orig_compressed))
 
@@ -311,6 +314,7 @@ def main2(args):
         print("Writing out original euler difference map for common intersection before alignment")
         orig_eul_fn = outprefix + '_orig_dz_eul.tif'
         iolib.writeGTiff(diff_euler_orig, orig_eul_fn, dem1_clip_ds)
+        dem2_clip_ds = None
         dem1_clip_ds = None
 
     #Compute final elevation difference
@@ -329,7 +333,7 @@ def main2(args):
         #Get updated, final mask
         static_mask = get_mask(dem2_clip_ds_align, dem2_fn, filter=filter)
         dem2_clip_ds_align = None
-        static_mask = np.ma.getmaskarray(np.ma.array(diff_euler_align, mask=static_mask))
+        static_mask = np.logical_or(np.ma.getmaskarray(diff_euler_align), static_mask)
         diff_euler_align_compressed = diff_euler_align[~static_mask].compressed()
         diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
 
