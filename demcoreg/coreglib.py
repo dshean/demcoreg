@@ -221,8 +221,9 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     print("Computing common mask")
     common_mask = ~(malib.common_mask([dh, aspect, slope]))
 
-    xdata = aspect[common_mask]
-    ydata = dh[common_mask]/np.tan(np.deg2rad(slope[common_mask]))
+    xdata = aspect[common_mask].data
+    ydata = (dh[common_mask]/np.tan(np.deg2rad(slope[common_mask]))).data
+    print(ydata.size)
 
     #Generate synthetic data to test curve_fit
     #xdata = np.arange(0,360,0.01)
