@@ -10,11 +10,19 @@ import matplotlib.pyplot as plt
 from osgeo import gdal
 from pygeotools.lib import geolib, malib, iolib
 
+#Run as:
+#dem_align_post.py $(ll *tif | grep 'alongtrack/WV03' | awk '{print $9}' | sed 's#.tif#_dem_align/*[0-9]_align.tif#')
+#dem_align_post.py $(ll *tif | grep 'alongtrack/WV03' | awk '{print $9}' | sed 's#.tif#_dem_align/*tiltcorr_align.tif#')
+#dem_align_post.py $(ll *tif | grep 'alongtrack/WV0[12]' | awk '{print $9}' | sed 's#.tif#_dem_align/*tiltcorr_align.tif#')
+#dem_align_post.py $(ll *tif | grep 'QB02' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#')
+#cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
+
 #out_fn_prefix = 'dem_align_aster'
 #out_fn_prefix = 'dem_align_at_wv3'
+out_fn_prefix = 'dem_align_at_wv12'
 #out_fn_prefix = 'dem_align_qb'
 #out_fn_prefix = 'dem_align_noqb'
-out_fn_prefix = 'dem_align'
+#out_fn_prefix = 'dem_align'
 
 #Throw out gross outliers
 filter=True
@@ -124,13 +132,11 @@ def make_map(x, y, z, cx, cy):
 
 print("Building fn_list")
 #fn_list = glob.glob('*dem_align/*align.tif')
-#ll *tif | grep 'alongtrack/WV03' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#'
-#ll *tif | grep 'QB02' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#'
-#cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
 fn_list = sys.argv[1:]
 fn_list = iolib.fn_list_valid(fn_list)
 print("Isolating x, y, z offsets")
-xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split('_'))[-4:-1]], dtype=float) for fn in fn_list])
+delim='_nuth_'
+xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split(delim)[-1].split('_'))[0:3]], dtype=float) for fn in fn_list])
 print("Extracting center coords")
 t_srs = geolib.hma_aea_srs
 #t_srs = geolib.conus_aea_srs
