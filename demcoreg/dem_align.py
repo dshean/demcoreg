@@ -15,7 +15,7 @@ from osgeo import gdal
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pygeotools.lib import iolib, malib, geolib, warplib
+from pygeotools.lib import iolib, malib, geolib, warplib, filtlib
 
 from demcoreg import coreglib, dem_mask
 
@@ -40,6 +40,10 @@ def getparser():
             help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM')
     parser.add_argument('-max_offset', type=float, default=100, \
             help='Maximum expected horizontal offset in meters')
+    parser.add_argument('-max_dz', type=float, default=100, \
+            help='Maximum expected vertical offset in meters, used to filter outliers')
+    parser.add_argument('-slope_lim', type=float, nargs=2, default=(0.1, 40), \
+            help='Minimum and maximum surface slope limits to consider')
     parser.add_argument('-max_iter', type=int, default=10, \
             help='Maximum number of iterations, if tol is not reached')
     parser.add_argument('-outdir', default=None, help='Output directory')
@@ -66,7 +70,7 @@ def get_mask(ds, dem_fn=None, filter='not_forest', mask_glaciers=True, toa_mask=
     return ~(static_mask)
 
 def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, remove_outliers=True, \
-        apply_mask=True, filter=filter):
+        max_dz=50, slope_lim=(0.1, 40), apply_mask=True, filter=filter):
     #Make sure the input datasets have the same resolution/extent
     #Use projection of source DEM
     dem1_clip_ds, dem2_clip_ds = warplib.memwarp_multi([dem1_ds, dem2_ds], \
@@ -110,6 +114,14 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
 
     #This needs further testing
     if remove_outliers:
+        print("Outlier removal, pixel count:")
+        print(diff_stats[0])
+        print("Absolute dz filter: %0.2f" % max_dz)
+        #Absolute dz filter
+        diff_euler = np.ma.masked_greater(diff_euler, max_dz)
+        print(diff_euler.count())
+
+        #Outlier dz filter
         med = diff_stats[5]
         nmad = diff_stats[6]
         f = 3
@@ -118,11 +130,20 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         #Use IQR
         #rmin = diff_stats[7]
         #rmax = diff_stats[8]
+        print("3-sigma filter: %0.2f - %0.2f" % (rmin, rmax))
         diff_euler = np.ma.masked_outside(diff_euler, rmin, rmax)
+        print(diff_euler.count())
+
         #Should also apply to original dem1 and dem2 for sad and ncc
 
-    #Add absolute dz filter
-    #Add slope filter
+    #Remove extreme slopes
+    #Note that we combine masks from diff_euler and dem1_slope in coreglib
+    print("Slope filter: %0.2f - %0.2f" % slope_lim)
+    dem1_slope = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='slope', returnma=True, computeEdges=True)
+    slope_stats = malib.print_stats(dem1_slope)
+    print("Initial count: %i" % slope_stats[0])
+    dem1_slope = filtlib.range_fltr(dem1_slope, slope_lim) 
+    print(dem1_slope.count())
 
     print("Computing sub-pixel offset between DEMs using mode: %s" % mode)
 
@@ -149,9 +170,8 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         dy = sp_offset[0]*dem2_gt[5]
     #Nuth and Kaab (2011)
     elif mode == "nuth":
-        print("Computing slope and aspect")
-        dem1_slope = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='slope', returnma=True)
-        dem1_aspect = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='aspect', returnma=True)
+        print("Computing aspect")
+        dem1_aspect = geolib.gdaldem_mem_ds(dem1_clip_ds, processing='aspect', returnma=True, computeEdges=True)
         dem1_clip_ds = None
         #Compute relationship between elevation difference, slope and aspect
         fit_param, fig = coreglib.compute_offset_nuth(diff_euler, dem1_slope, dem1_aspect, plot=False)
@@ -171,7 +191,6 @@ def compute_offset(dem1_ds, dem2_ds, dem2_fn, mode='nuth', max_offset_m=100, rem
         #Want to compare all methods, average offsets
         #m, int_offset, sp_offset = coreglib.compute_offset_sad(dem1, dem2)
         #m, int_offset, sp_offset = coreglib.compute_offset_ncc(dem1, dem2)
-    #This is a hack to apply the computed median bias correction for shpclip area only
     elif mode == "none":
         print("Skipping alignment, writing out DEM with median bias over static surfaces removed")
         dst_fn = outprefix+'_med%0.1f.tif' % dz
@@ -189,6 +208,8 @@ def main2(args):
     apply_mask = not args.nomask
     filter = args.filter
     max_offset_m = args.max_offset
+    max_dz = args.max_dz
+    slope_lim = args.slope_lim
     tiltcorr = args.tiltcorr
 
     #These are tolerances (in meters) to stop iteration
@@ -240,7 +261,7 @@ def main2(args):
     while True:
         print("*** Iteration %i ***" % n)
         dx, dy, dz, static_mask, fig = compute_offset(dem1_ds, dem2_ds_align, dem2_fn, mode, max_offset_m, \
-                apply_mask=apply_mask, filter=filter)
+                apply_mask=apply_mask, filter=filter, max_dz=max_dz, slope_lim=slope_lim)
         if n == 1:
             static_mask_orig = static_mask
         xyz_shift_str_iter = "dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx, dy, dz)
@@ -251,7 +272,8 @@ def main2(args):
             dst_fn = outprefix + '_%s_iter%02i_plot.png' % (mode, n)
             print("Writing offset plot: %s" % dst_fn)
             fig.gca().set_title(xyz_shift_str_iter)
-            fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+            #fig.savefig(dst_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+            fig.savefig(dst_fn, dpi=300)
 
         #Apply the horizontal shift to the original dataset
         dem2_ds_align = coreglib.apply_xy_shift(dem2_ds_align, dx, dy, createcopy=False)
@@ -365,11 +387,12 @@ def main2(args):
             im = ax.imshow(vals, cmap='cpt_rainbow', clim=fitplane_clim)
             pltlib.add_scalebar(ax, res=res)
             pltlib.hide_ticks(ax)
-            pltlib.add_cbar(ax, im, label='Fit plane residuals (m)')
+            pltlib.add_cbar(ax, im, arr=vals, clim=fitplane_clim, label='Fit plane residuals (m)')
             fig.tight_layout()
             tiltcorr_fig_fn = outprefix + '%s_align_dz_eul_fitplane.png' % xyz_shift_str_cum
             print("Writing out figure: %s" % tiltcorr_fig_fn)
-            fig.savefig(tiltcorr_fig_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+            #fig.savefig(tiltcorr_fig_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
+            fig.savefig(tiltcorr_fig_fn, dpi=300)
 
         #Compute higher-order fits?
         #Could also attempt to model along-track and cross-track artifacts
@@ -400,21 +423,21 @@ def main2(args):
         dem_clim = malib.calcperc(dem1_orig, (2,98))
         axa[0,0].imshow(dem1_hs, cmap='gray')
         im = axa[0,0].imshow(dem1_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6)
-        pltlib.add_cbar(axa[0,0], im, label=None)
+        pltlib.add_cbar(axa[0,0], im, arr=dem1_orig, clim=dem_clim, label=None)
         pltlib.add_scalebar(axa[0,0], res=res)
         axa[0,0].set_title('Reference DEM')
         axa[0,1].imshow(dem2_hs, cmap='gray')
         im = axa[0,1].imshow(dem2_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6)
-        pltlib.add_cbar(axa[0,1], im, label=None)
+        pltlib.add_cbar(axa[0,1], im, arr=dem2_orig, clim=dem_clim, label=None)
         axa[0,1].set_title('Source DEM')
         axa[0,2].imshow(~static_mask_orig, clim=(0,1), cmap='gray')
         axa[0,2].set_title('Surfaces for co-registration')
         dz_clim = malib.calcperc_sym(diff_euler_orig_compressed, (5, 95))
         im = axa[1,0].imshow(diff_euler_orig, cmap='RdBu', clim=dz_clim)
-        pltlib.add_cbar(axa[1,0], im, label=None)
+        pltlib.add_cbar(axa[1,0], im, arr=diff_euler_orig, clim=dz_clim, label=None)
         axa[1,0].set_title('Elev. Diff. Before (m)')
         im = axa[1,1].imshow(diff_euler_align, cmap='RdBu', clim=dz_clim)
-        pltlib.add_cbar(axa[1,1], im, label=None)
+        pltlib.add_cbar(axa[1,1], im, arr=diff_euler_align, clim=dz_clim, label=None)
         axa[1,1].set_title('Elev. Diff. After (m)')
 
         #Tried to insert Nuth fig here
@@ -443,7 +466,6 @@ def main2(args):
 
         fig_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
         print("Writing out figure: %s" % fig_fn)
-        #f.savefig(fig_fn, dpi=300, bbox_inches='tight', pad_inches=0.1)
         f.savefig(fig_fn, dpi=300)
 
     #Removing residual planar tilt can introduce additional slope/aspect dependent offset
