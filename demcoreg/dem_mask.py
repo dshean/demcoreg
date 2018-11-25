@@ -13,7 +13,6 @@ Dependencies: gdal, wget, requests, bs4
 """
 
 #To do: 
-#Add minium valid pixel count check - if not met, relax some criteria
 #Integrate 1-km LULC data: http://www.landcover.org/data/landcover/
 
 import sys
@@ -575,7 +574,7 @@ def main():
         print("Applying MODSCAG fractional snow cover percent filter (masking values >= %0.1f%%)" % args.modscag_thresh)
         modscag_perc = iolib.ds_getma(ds_dict['modscag'])
         if writeall:
-            out_fn = out_fn_base+'_modscag_perc.tif'
+            out_fn = out_fn_base+'_modscag_fsca_perc.tif'
             print("Writing out %s" % out_fn)
             iolib.writeGTiff(modscag_perc, out_fn, src_ds=ds_dict['dem'])
         modscag_mask = (modscag_perc.filled(0) >= args.modscag_thresh) 
