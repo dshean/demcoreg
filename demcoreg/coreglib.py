@@ -54,6 +54,14 @@ def apply_z_shift(ds, dz, createcopy=True):
     b.WriteArray(a.filled())
     return ds_shift
 
+#Function for fitting Nuth and Kaab (2011)
+def nuth_func(x, a, b, c):
+    y = a * np.cos(np.deg2rad(b-x)) + c
+    #Can use Phasor addition, but need to change conversion to offset dx and dy
+    #https://stackoverflow.com/questions/12397412/i-know-scipy-curve-fit-can-do-better?rq=1
+    #y = a * np.cos(np.deg2rad(x)) + b * np.sin(np.deg2rad(x)) + c
+    return y
+
 def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
     """Compute subpixel horizontal offset between input rasters using sum of absolute differences (SAD) method
     """
@@ -189,31 +197,22 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
 
     return m, int_offset, sp_offset, fig
 
-#Function for fitting Nuth and Kaab (2011)
-def nuth_func(x, a, b, c):
-    y = a * np.cos(np.deg2rad(b-x)) + c
-    #Per Suki suggestion, can use Phasor addition
-    #y = a * np.cos(np.deg2rad(x)) + b * np.sin(np.deg2rad(x)) + c
-    return y
-
 #This is the Nuth and Kaab (2011) method
-def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
+def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, plot=True):
     """Compute horizontal offset between input rasters using Nuth and Kaab [2011] (nuth) method
     """
     import scipy.optimize as optimization
 
+    if dh.count() < min_count:
+        sys.exit("Not enough dh samples")
+    if slope.count() < min_count:
+        sys.exit("Not enough slope/aspect samples")
+
     #mean_dh = dh.mean()
     #mean_slope = slope.mean()
     #c_seed = (mean_dh/np.tan(np.deg2rad(mean_slope))) 
-    
     med_dh = malib.fast_median(dh)
-    if dh.count() < min_count:
-        sys.exit("Not enough dh samples")
-
     med_slope = malib.fast_median(slope)
-    if slope.count() < min_count:
-        sys.exit("Not enough dh samples")
-
     c_seed = (med_dh/np.tan(np.deg2rad(med_slope))) 
 
     x0 = np.array([0.0, 0.0, c_seed])
@@ -221,9 +220,30 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     print("Computing common mask")
     common_mask = ~(malib.common_mask([dh, aspect, slope]))
 
+    #Prepare x and y data
     xdata = aspect[common_mask].data
     ydata = (dh[common_mask]/np.tan(np.deg2rad(slope[common_mask]))).data
+
+    print("Initial sample count:")
     print(ydata.size)
+
+    if remove_outliers:
+        print("Removing outliers")
+        #print("Absolute dz filter: %0.2f" % max_dz)
+        #diff_euler = np.ma.masked_greater(diff_euler, max_dz)
+        #print(diff_euler.count())
+
+        #Outlier dz filter
+        f = 3
+        sigma, u = (ydata.std(), ydata.mean())
+        #sigma, u = malib.mad(ydata, return_med=True)
+        rmin = u - f*sigma
+        rmax = u + f*sigma
+        print("3-sigma filter: %0.2f - %0.2f" % (rmin, rmax))
+        idx = (ydata >= rmin) & (ydata <= rmax)
+        xdata = xdata[idx]
+        ydata = ydata[idx]
+        print(ydata.size)
 
     #Generate synthetic data to test curve_fit
     #xdata = np.arange(0,360,0.01)
@@ -235,43 +255,23 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     #xdata = xdata[idx]
     #ydata = ydata[idx]
 
-    """
-    #Fit to original, unfiltered data
-    fit = optimization.curve_fit(nuth_func, xdata, ydata, x0)[0]
-    print(fit) 
-    genplot(xdata, ydata, fit) 
-    """
-
-    """
-    #Filter to remove outliers 
-    #Compute median absolute difference
-    y_med = np.median(ydata)
-    y_mad = malib.mad(ydata)
-    mad_factor = 3
-    y_perc = [y_med - y_mad*mad_factor, y_med + y_mad*mad_factor]
-
-    y_idx = ((ydata >= y_perc[0]) & (ydata <= y_perc[1]))
-    ydata_clip = ydata[y_idx]
-    xdata_clip = xdata[y_idx]
-
-    fit = optimization.curve_fit(nuth_func, xdata_clip, ydata_clip, x0)[0]
-    print(fit)
-    genplot(xdata_clip, ydata_clip, fit) 
-    """
     #Compute robust statistics for 1-degree bins
     nbins = 360
     bin_range = (0., 360.)
-    bin_count, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='count', \
-            nbins=nbins, bin_range=bin_range)
-    bin_med, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='median', \
-            nbins=nbins, bin_range=bin_range)
+    bin_width = 1.0
+    bin_count, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='count', nbins=nbins, bin_range=bin_range)
+    bin_med, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat='median', nbins=nbins, bin_range=bin_range)
+    #Needed to estimate sigma for weighted lsq
+    #bin_mad, bin_edges, bin_centers = malib.bin_stats(xdata, ydata, stat=malib.mad, nbins=nbins, bin_range=bin_range)
     #Started implementing this for more generic binning, needs testing
     #bin_count, x_bin_edges, y_bin_edges = malib.get_2dhist(xdata, ydata, \
     #        xlim=bin_range, nbins=(nbins, nbins), stat='count')
 
     """
     #Mask bins in grid directions, can potentially contain biased stats
-    badbins = [0, 45, 90, 180, 225, 270, 315]
+    #Especially true for SGM algorithm
+    #badbins = [0, 90, 180, 270, 360]
+    badbins = [0, 45, 90, 135, 180, 225, 270, 315, 360]
     bin_stat = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_stat)
     bin_edges = np.ma.masked_where(np.around(bin_edges[:-1]) % 45 == 0, bin_edges)
     """
@@ -279,49 +279,95 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, plot=True):
     #Remove any bins with only a few points
     min_bin_sample_count = 9
     idx = (bin_count.filled(0) >= min_bin_sample_count) 
-    bin_med = bin_med[idx]
+    bin_med = bin_med[idx].data
+    #bin_mad = bin_mad[idx].data
     bin_centers = bin_centers[idx]
 
     fit = None
     fit_fig = None
 
+    #Want a good distribution of bins, at least 1/4 to 1/2 of sinusoid, to ensure good fit
     #Need at least 3 valid bins to fit 3 parameters in nuth_func
-    min_bin_count = 3
-    if len(bin_med) >= min_bin_count:
-        fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
-        if plot:
-            fit_fig = genplot(bin_centers, bin_med, fit, xdata=xdata, ydata=ydata) 
-    print(fit)
-    return fit, fit_fig
+    #min_bin_count = 3
+    min_bin_count = 90 
+    
+    #Not going to help if we have a step function between two plateaus, but better than nothing
+    #Calculate bin aspect spread
+    bin_ptp = np.cos(np.radians(bin_centers)).ptp()
+    min_bin_ptp = 1.0 
 
-def genplot(x, y, fit, xdata=None, ydata=None, maxpts=10000):
-    bin_range = (0, 360)
-    a = (np.arange(*bin_range))
-    f_a = nuth_func(a, fit[0], fit[1], fit[2])
-    nuth_func_str = r'$y=%0.2f*cos(%0.2f-x)+%0.2f$' % tuple(fit)
-    if xdata.size > maxpts:
-        import random
-        idx = random.sample(list(range(xdata.size)), 10000)
-    else:
-        idx = np.arange(xdata.size)
-    f, ax = plt.subplots(figsize=(6,6))
-    ax.set_xlabel('Aspect (deg)')
-    ax.set_ylabel('dh/tan(slope) (m)')
-    ax.plot(xdata[idx], ydata[idx], 'k.', label='Orig pixels')
-    ax.plot(x, y, 'ro', label='Bin median')
-    ax.axhline(color='gray')
-    ax.plot(a, f_a, 'b', label=nuth_func_str)
-    ax.set_xlim(*bin_range)
-    abs_ylim = np.max([np.abs(y.min()), np.abs(y.max())])
-    pad = 0.2 * abs_ylim 
-    ylim = (-abs_ylim - pad, abs_ylim + pad)
-    #ylim = (y.min() - pad, y.max() + pad)
-    minylim = (-10,10)
-    if ylim[0] > minylim[0]:
-        ylim = minylim
-    ax.set_ylim(*ylim)
-    ax.legend(prop={'size':8})
-    return f 
+    #Should iterate here, if not enough bins, increase bin width
+    if len(bin_med) >= min_bin_count and bin_ptp >= min_bin_ptp:
+
+        print("Computing fit")
+        #Unweighted fit
+        #fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
+
+        #Weight by observed spread in each bin 
+        #sigma = bin_mad
+        #fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0, sigma, absolute_sigma=True)[0]
+
+        #Weight by bin count
+        sigma = bin_count.max()/bin_count
+        fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0, sigma, absolute_sigma=False)[0]
+
+        print(fit)
+
+        if plot:
+            print("Generating Nuth and Kaab plot")
+            bin_idx = np.digitize(xdata, bin_edges)
+            output = []
+            for i in np.arange(1, len(bin_edges)):
+                output.append(ydata[bin_idx==i])
+            #flierprops={'marker':'.'}
+            lw = 0.25
+            whiskerprops={'linewidth':lw}
+            capprops={'linewidth':lw}
+            boxprops={'facecolor':'k', 'linewidth':0}
+            medianprops={'marker':'o', 'ms':1, 'color':'r'}
+            fit_fig, ax = plt.subplots(figsize=(6,6))
+            #widths = (bin_width/2.0)
+            widths = 2.5*(bin_count/bin_count.max())
+            #widths = bin_count/np.percentile(bin_count, 50)
+            #Stride
+            s=3
+            bp = ax.boxplot(output[::s], positions=bin_centers[::s], widths=widths[::s], showfliers=False, \
+                    patch_artist=True, boxprops=boxprops, whiskerprops=whiskerprops, capprops=capprops, \
+                    medianprops=medianprops)
+            bin_ticks = [0, 45, 90, 135, 180, 225, 270, 315, 360]
+            ax.set_xticks(bin_ticks)
+            ax.set_xticklabels(bin_ticks)
+            """
+            #Can pull out medians from boxplot
+            #We are computing multiple times, inefficient
+            bp_bin_med = []
+            for medline in bp['medians']:
+                bp_bin_med.append(medline.get_ydata()[0])
+            """
+
+            #Plot the fit
+            f_a = nuth_func(bin_centers, fit[0], fit[1], fit[2])
+            nuth_func_str = r'$y=%0.2f*cos(%0.2f-x)+%0.2f$' % tuple(fit)
+            ax.plot(bin_centers, f_a, 'b', label=nuth_func_str)
+
+            ax.set_xlabel('Aspect (deg)')
+            ax.set_ylabel('dh/tan(slope) (m)')
+            ax.axhline(color='gray', linewidth=0.5)
+
+            ax.set_xlim(*bin_range)
+            ylim = ax.get_ylim()
+            abs_ylim = np.max(np.abs(ylim))
+            #abs_ylim = np.max(np.abs([ydata.min(), ydata.max()]))
+            #pad = 0.2 * abs_ylim 
+            pad = 0
+            ylim = (-abs_ylim - pad, abs_ylim + pad)
+            minylim = (-10,10)
+            if ylim[0] > minylim[0]:
+                ylim = minylim
+            ax.set_ylim(*ylim)
+            ax.legend(prop={'size':8})
+
+    return fit, fit_fig
 
 #Function copied from from openPIV pyprocess
 def find_first_peak(corr):
