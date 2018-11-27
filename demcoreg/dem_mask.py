@@ -457,7 +457,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
 
         if 'bareground' in mask_list and args.bareground_thresh > 0:
             bareground_ds = gdal.Open(get_bareground_fn())
-            bareground_ds_warp = warplib.memwarp_multi(bareground_ds, res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
+            bareground_ds_warp = warplib.memwarp_multi([bareground_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
             out_fn = None
             if writeout:
                 out_fn = out_fn_base+'_bareground.tif'
