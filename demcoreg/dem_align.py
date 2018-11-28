@@ -187,7 +187,7 @@ def getparser():
             help='Maximum expected vertical offset in meters, used to filter outliers')
     parser.add_argument('-slope_lim', type=float, nargs=2, default=(0.1, 40), \
             help='Minimum and maximum surface slope limits to consider')
-    parser.add_argument('-max_iter', type=int, default=20, \
+    parser.add_argument('-max_iter', type=int, default=30, \
             help='Maximum number of iterations, if tol is not reached')
     parser.add_argument('-outdir', default=None, help='Output directory')
     return parser
@@ -240,23 +240,22 @@ def main(argv=None):
     print("Output: %s\n" % outprefix)
 
     src_dem_ds = gdal.Open(src_dem_fn)
-    #Create a copy to be updated in place
-    #src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
-    #This is another approach that duplicates CreateCopy functionality
-    ##src_dem_ds_align = geolib.mem_ds_copy(src_dem_ds)
 
     #Get local cartesian coordinate system
-    #local_srs = geolib.localortho_ds(src_dem_ds)
     local_srs = geolib.localtmerc_ds(src_dem_ds)
     #local_srs = geolib.ds_get_srs(src_dem_ds)
 
-    src_dem_ds_align = warplib.memwarp_multi_fn([src_dem_fn,], t_srs=local_srs, r='cubic')[0]
-
-    src_dem_ds = None
-    
-    #Resample to match "source" DEM
+    #Resample ref to match src DEM
+    #Create a copy to be updated in place
+    #src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
     #ref_dem_ds = warplib.memwarp_multi_fn([ref_dem_fn,], res=src_dem_ds_align, extent=src_dem_ds_align, t_srs=local_srs, r='cubic')[0]
-    ref_dem_ds = gdal.Open(ref_dem_fn) 
+    
+    #Keep everything at low res
+    #src_dem_ds_align = warplib.memwarp_multi_fn([src_dem_fn,], t_srs=local_srs, r='cubic')[0]
+    #ref_dem_ds = gdal.Open(ref_dem_fn) 
+
+    #Resample both to average of the two
+    ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='mean', r='cubic')
 
     #Iteration number
     n = 1
@@ -351,6 +350,8 @@ def main(argv=None):
                 vals, resid, coeff = geolib.ma_fitpoly(diff_euler_align_filt, order=1, gt=gt, perc=(0,100), origmask=False)
                 #vals, resid, coeff = geolib.ma_fitplane(diff_euler_align_filt, gt, perc=(12.5, 87.5), origmask=False)
 
+                #Should write out coeff or grid with correction 
+
                 vals_stats = malib.print_stats(vals)
 
                 #Want to have max_tilt check here
@@ -373,12 +374,12 @@ def main(argv=None):
                     fig, axa = plt.subplots(1,2, figsize=(8, 4))
                     dz_clim = malib.calcperc_sym(vals, (2, 98))
                     ax = pltlib.iv(diff_euler_align_filt, ax=axa[0], cmap='RdBu', clim=dz_clim, \
-                            label='Residual dz (m)', ds=src_dem_clip_ds_align)
+                            label='Residual dz (m)', scalebar=False)
                     ax = pltlib.iv(valgrid, ax=axa[1], cmap='RdBu', clim=dz_clim, \
-                            label='Polyfit dz (m)', ds=src_dem_clip_ds_align)
-                    if tiltcorr:
-                        xyz_shift_str_cum_fn += "_tiltcorr"
-                    tiltcorr_fig_fn = outprefix + '%s_polyfit.png' % xyz_shift_str_cum
+                            label='Polyfit dz (m)', ds=src_dem_ds_align)
+                    #if tiltcorr:
+                        #xyz_shift_str_cum_fn += "_tiltcorr"
+                    tiltcorr_fig_fn = outprefix + '%s_polyfit.png' % xyz_shift_str_cum_fn
                     print("Writing out figure: %s\n" % tiltcorr_fig_fn)
                     fig.savefig(tiltcorr_fig_fn, dpi=300)
 
@@ -396,14 +397,14 @@ def main(argv=None):
 
     if True:
         #Write out aligned eulerian difference map for clipped extent with vertial offset removed
-        align_eul_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum
+        align_eul_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum_fn
         print("Writing out aligned difference map with median vertical offset removed")
         iolib.writeGTiff(diff_euler_align, align_eul_fn, src_dem_clip_ds_align)
         src_dem_clip_ds_align = None
 
     #Write out final aligned src_dem 
     if True:
-        align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum
+        align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum_fn
         print("Writing out shifted src_dem with median vertical offset removed: %s" % align_fn)
         #Might be cleaner way to write out MEM ds directly to disk
         src_dem_align = iolib.ds_getma(src_dem_ds_align)
@@ -442,7 +443,8 @@ def main(argv=None):
     #Create output plot
     if True:
         print("Creating final plot")
-        f, axa = plt.subplots(2, 3, figsize=(11, 8.5))
+        #f, axa = plt.subplots(2, 4, figsize=(11, 8.5))
+        f, axa = plt.subplots(2, 4, figsize=(16, 8))
         for ax in axa.ravel()[:-1]:
             ax.set_facecolor('k')
             pltlib.hide_ticks(ax)
@@ -467,32 +469,41 @@ def main(argv=None):
         pltlib.add_cbar(axa[1,1], im, arr=diff_euler_align, clim=dz_clim, label=None)
         axa[1,1].set_title('Elev. Diff. After (m)')
 
+        tight_dz_clim = (-2.0, 2.0)
+        #tight_dz_clim = malib.calcperc_sym(diff_euler_align_filt, (5, 95))
+        im = axa[1,2].imshow(diff_euler_align_filt, cmap='RdBu', clim=tight_dz_clim)
+        pltlib.add_cbar(axa[1,2], im, arr=diff_euler_align_filt, clim=tight_dz_clim, label=None)
+        axa[1,2].set_title('Elev. Diff. After (m)')
+
         #Tried to insert Nuth fig here
         #ax_nuth.change_geometry(1,2,1)
         #f.axes.append(ax_nuth)
 
         bins = np.linspace(dz_clim[0], dz_clim[1], 128)
-        axa[1,2].hist(diff_euler_orig_compressed, bins, color='g', label='Before', alpha=0.5)
-        axa[1,2].hist(diff_euler_align_compressed, bins, color='b', label='After', alpha=0.5)
-        axa[1,2].set_xlim(*dz_clim)
-        axa[1,2].axvline(0, color='k', linewidth=0.5, linestyle=':')
-        axa[1,2].set_xlabel('Elev. Diff. (m)')
-        axa[1,2].set_ylabel('Count (px)')
-        axa[1,2].set_title("Source - Reference")
+        axa[1,3].hist(diff_euler_orig_compressed, bins, color='g', label='Before', alpha=0.5)
+        axa[1,3].hist(diff_euler_align_compressed, bins, color='b', label='After', alpha=0.5)
+        axa[1,3].set_xlim(*dz_clim)
+        axa[1,3].axvline(0, color='k', linewidth=0.5, linestyle=':')
+        axa[1,3].set_xlabel('Elev. Diff. (m)')
+        axa[1,3].set_ylabel('Count (px)')
+        axa[1,3].set_title("Source - Reference")
         #axa[1,2].legend(loc='upper right')
         #before_str = 'Before\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((3,4,5,6))])
         #after_str = 'After\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((3,4,5,6))])
         before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((5,6))])
-        axa[1,2].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,2].transAxes)
+        axa[1,3].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,3].transAxes, fontsize=8)
         after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((5,6))])
-        axa[1,2].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,2].transAxes)
+        axa[1,3].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,3].transAxes, fontsize=8)
+
+        #This is empty
+        axa[0,3].axis('off')
 
         suptitle = '%s\nx: %+0.2fm, y: %+0.2fm, z: %+0.2fm' % (os.path.split(outprefix)[-1], dx_total, dy_total, dz_total)
         f.suptitle(suptitle)
         f.tight_layout()
         plt.subplots_adjust(top=0.90)
 
-        fig_fn = outprefix + '%s_align.png' % xyz_shift_str_cum
+        fig_fn = outprefix + '%s_align.png' % xyz_shift_str_cum_fn
         print("Writing out figure: %s" % fig_fn)
         f.savefig(fig_fn, dpi=300)
 
