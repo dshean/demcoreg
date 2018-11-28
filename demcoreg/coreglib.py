@@ -279,6 +279,7 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
     #Remove any bins with only a few points
     min_bin_sample_count = 9
     idx = (bin_count.filled(0) >= min_bin_sample_count) 
+    bin_count = bin_count[idx].data
     bin_med = bin_med[idx].data
     #bin_mad = bin_mad[idx].data
     bin_centers = bin_centers[idx]
@@ -301,15 +302,15 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
 
         print("Computing fit")
         #Unweighted fit
-        #fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
+        fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0)[0]
 
         #Weight by observed spread in each bin 
         #sigma = bin_mad
         #fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0, sigma, absolute_sigma=True)[0]
 
         #Weight by bin count
-        sigma = bin_count.max()/bin_count
-        fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0, sigma, absolute_sigma=False)[0]
+        #sigma = bin_count.max()/bin_count
+        #fit = optimization.curve_fit(nuth_func, bin_centers, bin_med, x0, sigma, absolute_sigma=False)[0]
 
         print(fit)
 
@@ -331,7 +332,9 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
             #widths = bin_count/np.percentile(bin_count, 50)
             #Stride
             s=3
-            bp = ax.boxplot(output[::s], positions=bin_centers[::s], widths=widths[::s], showfliers=False, \
+            #This is inefficient, but we have list of arrays with different length, need to filter
+            #Reduntant with earlier filter, should refactor
+            bp = ax.boxplot(np.array(output)[idx][::s], positions=bin_centers[::s], widths=widths[::s], showfliers=False, \
                     patch_artist=True, boxprops=boxprops, whiskerprops=whiskerprops, capprops=capprops, \
                     medianprops=medianprops)
             bin_ticks = [0, 45, 90, 135, 180, 225, 270, 315, 360]
@@ -368,6 +371,17 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
             ax.legend(prop={'size':8})
 
     return fit, fit_fig
+
+#Attempt to fit polynomial functions to along-track and cross-track signals
+#See demtools for existing code
+def fit_at_ct():
+    #Derive from image corners in projected array
+    #Use known orbintal inclinations, project wgs geometry into srs
+    img1_inc
+    img2_inc
+    #Rotate
+    #Stats for rows, cols
+    #Fit
 
 #Function copied from from openPIV pyprocess
 def find_first_peak(corr):
