@@ -45,7 +45,7 @@ def outlier_filter(diff, f=3, perc=None, max_dz=100):
     print(diff.count())
     return diff
 
-def get_slope(ds, slope_lim=(0.1, 40)):
+def get_filtered_slope(ds, slope_lim=(0.1, 40)):
     #Generate slope map
     print("Computing slope")
     slope = geolib.gdaldem_mem_ds(ds, processing='slope', returnma=True, computeEdges=False)
@@ -57,7 +57,7 @@ def get_slope(ds, slope_lim=(0.1, 40)):
     return slope
 
 def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outliers=True, max_offset=100, \
-        max_dz=50, slope_lim=(0.1, 40), mask_list=['glaciers',], plot=True):
+        max_dz=100, slope_lim=(0.1, 40), mask_list=['glaciers',], plot=True):
     #Make sure the input datasets have the same resolution/extent
     #Use projection of source DEM
     ref_dem_clip_ds, src_dem_clip_ds = warplib.memwarp_multi([ref_dem_ds, src_dem_ds], \
@@ -89,8 +89,8 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
         diff = outlier_filter(diff, f=3, max_dz=max_dz)
 
     #Want to use higher quality DEM, should determine automatically from original res/count
-    #slope = get_slope(ref_dem_clip_ds, slope_lim=slope_lim)
-    slope = get_slope(src_dem_clip_ds, slope_lim=slope_lim)
+    #slope = get_filtered_slope(ref_dem_clip_ds, slope_lim=slope_lim)
+    slope = get_filtered_slope(src_dem_clip_ds, slope_lim=slope_lim)
 
     print("Computing aspect")
     #aspect = geolib.gdaldem_mem_ds(ref_dem_clip_ds, processing='aspect', returnma=True, computeEdges=False)
@@ -243,13 +243,13 @@ def main(argv=None):
     src_dem_ds = gdal.Open(src_dem_fn)
 
     #Get local cartesian coordinate system
-    local_srs = geolib.localtmerc_ds(src_dem_ds)
-    #local_srs = geolib.ds_get_srs(src_dem_ds)
+    #local_srs = geolib.localtmerc_ds(src_dem_ds)
+    local_srs = geolib.get_ds_srs(src_dem_ds)
 
     #Resample ref to match src DEM
     #Create a copy to be updated in place
-    #src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
-    #ref_dem_ds = warplib.memwarp_multi_fn([ref_dem_fn,], res=src_dem_ds_align, extent=src_dem_ds_align, t_srs=local_srs, r='cubic')[0]
+    src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
+    ref_dem_ds = warplib.memwarp_multi_fn([ref_dem_fn,], res=src_dem_ds_align, extent=src_dem_ds_align, t_srs=local_srs, r='cubic')[0]
     
     #Keep everything at low res
     #src_dem_ds_align = warplib.memwarp_multi_fn([src_dem_fn,], t_srs=local_srs, r='cubic')[0]
@@ -259,7 +259,7 @@ def main(argv=None):
     #ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='mean', r='cubic')
 
     #Resample both to min of the two
-    ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='min', r='cubic')
+    #ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='min', r='cubic')
 
     #Iteration number
     n = 1
@@ -330,16 +330,18 @@ def main(argv=None):
                 #Get updated, final mask
                 static_mask_final = get_mask(src_dem_clip_ds_align, mask_list, src_dem_fn)
                 static_mask_final = np.logical_or(np.ma.getmaskarray(diff_align), static_mask_final)
+                
+                #Final stats, before outlier removal
+                diff_align_compressed = diff_align[~static_mask_final]
+                diff_align_stats = malib.get_stats_dict(diff_align_compressed, full=True)
 
                 #Prepare filtered version for tiltcorr fit
                 diff_align_filt = np.ma.array(diff_align, mask=static_mask_final)
-                #diff_align_filt = outlier_filter(diff_align_filt, f=3, max_dz=max_dz)
-                diff_align_filt = outlier_filter(diff_align_filt, perc=(12.5, 87.5), max_dz=max_dz)
-                slope = get_slope(src_dem_clip_ds_align)
+                diff_align_filt = outlier_filter(diff_align_filt, f=3, max_dz=max_dz)
+                #diff_align_filt = outlier_filter(diff_align_filt, perc=(12.5, 87.5), max_dz=max_dz)
+                slope = get_filtered_slope(src_dem_clip_ds_align)
                 diff_align_filt = np.ma.array(diff_align_filt, mask=np.ma.getmaskarray(slope))
-
-                diff_align_compressed = diff_align[~static_mask_final]
-                diff_align_stats = np.array(malib.print_stats(diff_align_compressed))
+                diff_align_filt_stats = malib.get_stats_dict(diff_align_filt, full=True)
 
             #Fit 2D polynomial to residuals and remove
             #To do: add support for along-track and cross-track artifacts
@@ -371,8 +373,6 @@ def main(argv=None):
                 #valgrid = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
                 src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, -valgrid, createcopy=False)
 
-                #diff_align_compressed = diff_align[~static_mask_final].compressed()
-                #diff_align_stats = np.array(malib.print_stats(diff_align_compressed))
                 if True:
                     print("Creating plot of polynomial fit to residuals")
                     fig, axa = plt.subplots(1,2, figsize=(8, 4))
@@ -407,8 +407,8 @@ def main(argv=None):
         src_dem_clip_ds_align = None
 
     #Write out final aligned src_dem 
+    align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum_fn
     if True:
-        align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum_fn
         print("Writing out shifted src_dem with median vertical offset removed: %s" % align_fn)
         #Might be cleaner way to write out MEM ds directly to disk
         src_dem_align = iolib.ds_getma(src_dem_ds_align)
@@ -435,7 +435,15 @@ def main(argv=None):
         static_mask_orig = np.logical_or(np.ma.getmaskarray(diff_orig), static_mask_orig)
         #For some reason, ASTER DEM diff have a spike near the 0 bin, could be an issue with masking?
         diff_orig_compressed = diff_orig[~static_mask_orig]
-        diff_orig_stats = np.array(malib.print_stats(diff_orig_compressed))
+        diff_orig_stats = malib.get_stats_dict(diff_orig_compressed, full=True)
+
+        #Prepare filtered version for comparison 
+        diff_orig_filt = np.ma.array(diff_orig, mask=static_mask_orig)
+        diff_orig_filt = outlier_filter(diff_orig_filt, f=3, max_dz=max_dz)
+        #diff_orig_filt = outlier_filter(diff_orig_filt, perc=(12.5, 87.5), max_dz=max_dz)
+        slope = get_filtered_slope(src_dem_clip_ds)
+        diff_orig_filt = np.ma.array(diff_orig_filt, mask=np.ma.getmaskarray(slope))
+        diff_orig_filt_stats = malib.get_stats_dict(diff_orig_filt, full=True)
 
         #Write out original difference map
         print("Writing out original difference map for common intersection before alignment")
@@ -443,6 +451,21 @@ def main(argv=None):
         iolib.writeGTiff(diff_orig, orig_diff_fn, ref_dem_clip_ds)
         src_dem_clip_ds = None
         ref_dem_clip_ds = None
+
+    if True:
+        align_stats_fn = outprefix + '%s_align_stats.json' % xyz_shift_str_cum_fn
+        align_stats = {}
+        align_stats['src_fn'] = src_dem_fn 
+        align_stats['ref_fn'] = ref_dem_fn 
+        align_stats['align_fn'] = align_fn 
+        align_stats['before'] = diff_orig_stats
+        align_stats['before_filt'] = diff_orig_filt_stats
+        align_stats['after'] = diff_align_stats
+        align_stats['after_filt'] = diff_align_filt_stats
+        
+        import json
+        with open(align_stats_fn, 'w') as f:
+            json.dump(align_stats, f)
 
     #Create output plot
     if True:
@@ -493,12 +516,9 @@ def main(argv=None):
         axa[1,3].set_xlabel('Elev. Diff. (m)')
         axa[1,3].set_ylabel('Count (px)')
         axa[1,3].set_title("Source - Reference")
-        #axa[1,2].legend(loc='upper right')
-        #before_str = 'Before\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_orig_stats[np.array((3,4,5,6))])
-        #after_str = 'After\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_align_stats[np.array((3,4,5,6))])
-        before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_orig_stats[np.array((5,6))])
+        before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % (diff_orig_stats['med'], diff_orig_stats['mad'])
         axa[1,3].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,3].transAxes, fontsize=8)
-        after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_align_stats[np.array((5,6))])
+        after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % (diff_align_stats['med'], diff_align_stats['mad'])
         axa[1,3].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,3].transAxes, fontsize=8)
 
         #This is empty
