@@ -224,8 +224,9 @@ def main(argv=None):
 
     outdir = args.outdir
     if outdir is None:
-        #outdir = os.path.splitext(src_dem_fn)[0] + '_dem_align_lt1.5m_err'
         outdir = os.path.splitext(src_dem_fn)[0] + '_dem_align'
+        if tiltcorr:
+            outdir += '_tiltcorr'
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -255,7 +256,10 @@ def main(argv=None):
     #ref_dem_ds = gdal.Open(ref_dem_fn) 
 
     #Resample both to average of the two
-    ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='mean', r='cubic')
+    #ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='mean', r='cubic')
+
+    #Resample both to min of the two
+    ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='min', r='cubic')
 
     #Iteration number
     n = 1
@@ -469,7 +473,9 @@ def main(argv=None):
         pltlib.add_cbar(axa[1,1], im, arr=diff_euler_align, clim=dz_clim, label=None)
         axa[1,1].set_title('Elev. Diff. After (m)')
 
-        tight_dz_clim = (-2.0, 2.0)
+        #tight_dz_clim = (-1.0, 1.0)
+        #tight_dz_clim = (-2.0, 2.0)
+        tight_dz_clim = (-10.0, 10.0)
         #tight_dz_clim = malib.calcperc_sym(diff_euler_align_filt, (5, 95))
         im = axa[1,2].imshow(diff_euler_align_filt, cmap='RdBu', clim=tight_dz_clim)
         pltlib.add_cbar(axa[1,2], im, arr=diff_euler_align_filt, clim=tight_dz_clim, label=None)
