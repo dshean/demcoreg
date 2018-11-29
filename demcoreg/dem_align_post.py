@@ -127,6 +127,8 @@ print("Building fn_list")
 #fn_list = glob.glob('*dem_align/*align.tif')
 fn_list = sys.argv[1:]
 fn_list = iolib.fn_list_valid(fn_list)
+if not fn_list:
+    sys.exit("No valid input files")
 print("Isolating x, y, z offsets")
 delim='_nuth_'
 xyz = np.array([np.array([a[1:] for a in np.array(os.path.split(fn)[-1].split(delim)[-1].split('_'))[0:3]], dtype=float) for fn in fn_list])
