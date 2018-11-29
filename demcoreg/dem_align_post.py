@@ -8,6 +8,7 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from osgeo import gdal
+import pandas as pd
 from pygeotools.lib import geolib, malib, iolib
 
 #Run as:
@@ -17,19 +18,25 @@ from pygeotools.lib import geolib, malib, iolib
 #dem_align_post.py $(ll *tif | grep 'QB02' | awk '{print $9}' | sed 's#.tif#_dem_align/*align.tif#')
 #cat wv3_at_list.txt | sed 's#.tif#_dem_align/*align.tif#' > wv3_at_list_align.txt
 
-#out_fn_prefix = 'dem_align_aster'
-#out_fn_prefix = 'dem_align_at_wv3'
-out_fn_prefix = 'dem_align_at_wv12'
-#out_fn_prefix = 'dem_align_qb'
-#out_fn_prefix = 'dem_align_noqb'
-#out_fn_prefix = 'dem_align'
+outdir = 'dem_align_aster'
+#outdir = 'dem_align_at_wv3'
+#outdir = 'dem_align_at_wv12'
+#outdir = 'dem_align_qb'
+#outdir = 'dem_align_noqb'
+#outdir = 'dem_align_at'
+#outdir = 'dem_align_ct'
+
+if not os.path.exists(outdir):
+    os.makedirs(outdir)
+out_fn_prefix = os.path.join(outdir, outdir)
 
 #Throw out gross outliers
 filter=True
+mv_bad=True
 #WV/GE
-outlier_mag_thresh = 20 
+#outlier_mag_thresh = 20 
 #ASTER
-#outlier_mag_thresh = 90
+outlier_mag_thresh = 90
 
 def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
     cmean = np.mean([x,y,z], axis=1)
@@ -51,58 +58,44 @@ def make_plot3d(x, y, z, title=None, orthogonal_fig=True):
     
     if orthogonal_fig:
         from matplotlib.patches import Ellipse
-        fig_ortho = plt.figure(figsize=(10,5))
-        #fig_ortho = plt.figure()
+        #fig_ortho, axa = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(10,5))
+        fig_ortho, axa = plt.subplots(1, 3, figsize=(10,5))
         title = 'Co-registration Translation Vector Components, n=%i\n' % x.shape[0]
         title += 'mean: (%0.2f, %0.2f, %0.2f), std: (%0.2f, %0.2f, %0.2f)\n' % (tuple(cmean) + tuple(cstd))
         title += 'med: (%0.2f, %0.2f, %0.2f), nmad: (%0.2f, %0.2f, %0.2f)\n' % (tuple(cmed) + tuple(cnmad))
         title += 'CE90: %0.2f (Bias-corrected: %0.2f), LE90: %0.2f (Bias-corrected: %0.2f)' % (ce90, ce90_corr, le90, le90_corr)
         plt.suptitle(title) 
 
-        m = '.'
+        dot_prop={'color':'k', 'linestyle':'None', 'marker':'.', 'ms':3, 'label':'ICP correction vector', 'alpha':0.5}
+        mean_prop={'color':'r', 'linestyle':'None', 'marker':'o', 'label':'Mean'}
 
-        ax = fig_ortho.add_subplot(131)
-        ax.plot(x, y, color='b', linestyle='None', marker=m, label='ICP correction vector')
-        ax.plot(cmean[0], cmean[1], color='r', linestyle='None', marker='s', label='Mean')
-        #ax.scatter(x, y)
-        #ax.scatter(cmean[0], cmean[1], color='r', marker='s')
-        ax.set_xlim(-maxdim, maxdim)
-        ax.set_ylim(-maxdim, maxdim)
-        ax.minorticks_on()
-        ax.set_aspect('equal')
-        ax.set_xlabel('X offset (m)')
-        ax.set_ylabel('Y offset (m)')
+        for ax in axa:
+            ax.set_xlim(-maxdim, maxdim)
+            ax.set_ylim(-maxdim, maxdim)
+            ax.minorticks_on()
+            ax.set_aspect('equal')
+
+        axa[0].plot(x, y, **dot_prop)
+        axa[0].plot(cmean[0], cmean[1], **mean_prop)
+        axa[0].set_xlabel('X offset (m)')
+        axa[0].set_ylabel('Y offset (m)')
         e = Ellipse((0,0), 2*ce90, 2*ce90, linewidth=0, alpha=0.1)
-        ax.add_artist(e)
-        plt.legend(prop={'size':8}, numpoints=1, loc='upper left')
+        axa[0].add_artist(e)
+        axa[0].legend(prop={'size':8}, numpoints=1, loc='upper left')
 
-        ax = fig_ortho.add_subplot(132)
-        ax.plot(x, z, color='b', linestyle='None', marker=m, label='ICP correction vector')
-        ax.plot(cmean[0], cmean[2], color='r', linestyle='None', marker='s', label='Mean')
-        #ax.scatter(x, z)
-        #ax.scatter(cmean[0], cmean[2], color='r', marker='s')
-        ax.set_xlim(-maxdim, maxdim)
-        ax.set_ylim(-maxdim, maxdim)
-        ax.minorticks_on()
-        ax.set_aspect('equal')
-        ax.set_xlabel('X offset (m)')
-        ax.set_ylabel('Z offset (m)')
+        axa[1].plot(x, z, **dot_prop)
+        axa[1].plot(cmean[0], cmean[2], **mean_prop)
+        axa[1].set_xlabel('X offset (m)')
+        axa[1].set_ylabel('Z offset (m)')
         e = Ellipse((0,0), 2*ce90, 2*le90, linewidth=0, alpha=0.1)
-        ax.add_artist(e)
+        axa[1].add_artist(e)
 
-        ax = fig_ortho.add_subplot(133)
-        ax.plot(y, z, color='b', linestyle='None', marker=m, label='ICP correction vector')
-        ax.plot(cmean[1], cmean[2], color='r', linestyle='None', marker='s', label='Mean')
-        #ax.scatter(y, z)
-        #ax.scatter(cmean[1], cmean[2], color='r', marker='s')
-        ax.set_xlim(-maxdim, maxdim)
-        ax.set_ylim(-maxdim, maxdim)
-        ax.minorticks_on()
-        ax.set_aspect('equal')
-        ax.set_xlabel('Y offset (m)')
-        ax.set_ylabel('Z offset (m)')
+        axa[2].plot(y, z, **dot_prop)
+        axa[2].plot(cmean[1], cmean[2], **mean_prop)
+        axa[2].set_xlabel('X offset (m)')
+        axa[2].set_ylabel('Z offset (m)')
         e = Ellipse((0,0), 2*ce90, 2*le90, linewidth=0, alpha=0.1)
-        ax.add_artist(e)
+        axa[2].add_artist(e)
         
         plt.tight_layout()
 
@@ -144,29 +137,39 @@ t_srs = geolib.hma_aea_srs
 ll = np.array([geolib.get_center(gdal.Open(fn), t_srs=t_srs) for fn in fn_list])
 cy = ll[:,1]
 cx = ll[:,0]
-print(xyz.shape[0])
 m = np.sqrt(np.sum(np.square(xyz), axis=1))
 
-if filter:
-    stats = malib.print_stats(m)
-    print(stats)
-    #f=3.5
-    #outlier_mag_thresh = stats[5]+stats[6]*f
-    idx = (m > outlier_mag_thresh)
-    bad_fn = np.array(fn_list)[idx]
-    np.savetxt('%s_bad_fn.txt' % out_fn_prefix, bad_fn, fmt='%s')
-    good_fn = np.array(fn_list)[~idx]
-    np.savetxt('%s_good_fn.txt' % out_fn_prefix, good_fn, fmt='%s')
-    xyz = xyz[~idx]
-    cx = cx[~idx]
-    cy = cy[~idx]
-    print(xyz.shape[0])
+df = pd.DataFrame(xyz, index=fn_list, columns=['x','y','z'])
+df['m'] = m
+df['cy'] = cy
+df['cx'] = cx
 
-x = xyz[:,0]
-y = xyz[:,1]
-z = xyz[:,2]
+df = df.sort_values(by='m', ascending=False)
+print(df.shape[0])
+
+if filter:
+    print("Correction magnitude")
+    stats = malib.print_stats(m)
+    print("Outlier magnitude threshold:")
+    print(outlier_mag_thresh)
+    f=3.5
+    print(stats[5]+stats[6]*f)
+    idx = (df['m'] > outlier_mag_thresh)
+    df[idx].to_csv('%s_bad_fn.txt' % out_fn_prefix, sep=' ', columns='m', index=True, header=False, float_format='%0.2f')
+
+    if mv_bad:
+        print("Moving bad solutions")
+        import shutil
+        baddir = '%s_bad' % out_fn_prefix
+        os.makedirs(baddir)
+        for i in df[idx].index:
+            shutil.move(os.path.split(i)[0], baddir)
+
+    df[~idx].to_csv('%s_good_fn.txt' % out_fn_prefix, sep=' ', columns='m', index=True, header=False)
+    df = df[~idx]
+    print(df.shape[0])
 
 print("Creating plot")
-make_plot3d(x, y, z)
+make_plot3d(df['x'], df['y'], df['z'])
 print("Creating map")
-make_map(x,y,z,cx,cy)
+make_map(df['x'], df['y'], df['z'], df['cx'], df['cy'])
