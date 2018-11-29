@@ -230,8 +230,8 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
     if remove_outliers:
         print("Removing outliers")
         #print("Absolute dz filter: %0.2f" % max_dz)
-        #diff_euler = np.ma.masked_greater(diff_euler, max_dz)
-        #print(diff_euler.count())
+        #diff = np.ma.masked_greater(diff, max_dz)
+        #print(diff.count())
 
         #Outlier dz filter
         f = 3

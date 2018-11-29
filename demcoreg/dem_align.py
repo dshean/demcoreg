@@ -26,24 +26,24 @@ def get_mask(ds, mask_list, dem_fn=None):
     #return ~(static_mask)
     return static_mask
 
-def outlier_filter(diff_euler, f=3, perc=None, max_dz=100):
+def outlier_filter(diff, f=3, perc=None, max_dz=100):
     print("Removing outliers")
     print("Initial pixel count:")
-    print(diff_euler.count())
+    print(diff.count())
 
     print("Absolute dz filter: %0.2f" % max_dz)
     #Absolute dz filter
-    diff_euler = np.ma.masked_greater(diff_euler, max_dz)
-    print(diff_euler.count())
+    diff = np.ma.masked_greater(diff, max_dz)
+    print(diff.count())
 
     if perc is not None:
-        diff_euler = filtlib.perc_fltr(diff_euler, perc)
+        diff = filtlib.perc_fltr(diff, perc)
     else:
-        #diff_euler = filtlib.sigma_fltr(diff_euler, f)
-        diff_euler = filtlib.mad_fltr(diff_euler, f)
+        #diff = filtlib.sigma_fltr(diff, f)
+        diff = filtlib.mad_fltr(diff, f)
 
-    print(diff_euler.count())
-    return diff_euler
+    print(diff.count())
+    return diff
 
 def get_slope(ds, slope_lim=(0.1, 40)):
     #Generate slope map
@@ -77,16 +77,16 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
     src_dem = iolib.ds_getma(src_dem_clip_ds, 1)
 
     print("Elevation difference stats for uncorrected input DEMs (src - ref)")
-    diff_euler = src_dem - ref_dem
+    diff = src_dem - ref_dem
 
     static_mask = get_mask(src_dem_clip_ds, mask_list, src_dem_fn)
-    diff_euler = np.ma.array(diff_euler, mask=static_mask)
+    diff = np.ma.array(diff, mask=static_mask)
 
-    if diff_euler.count() == 0:
+    if diff.count() == 0:
         sys.exit("No overlapping, unmasked pixels shared between input DEMs")
 
     if remove_outliers:
-        diff_euler = outlier_filter(diff_euler, f=3, max_dz=max_dz)
+        diff = outlier_filter(diff, f=3, max_dz=max_dz)
 
     #Want to use higher quality DEM, should determine automatically from original res/count
     #slope = get_slope(ref_dem_clip_ds, slope_lim=slope_lim)
@@ -99,16 +99,16 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
     ref_dem_clip_ds = None
     src_dem_clip_ds = None
 
-    #Apply slope filter to diff_euler
-    #Note that we combine masks from diff_euler and slope in coreglib
-    diff_euler = np.ma.array(diff_euler, mask=np.ma.getmaskarray(slope))
+    #Apply slope filter to diff
+    #Note that we combine masks from diff and slope in coreglib
+    diff = np.ma.array(diff, mask=np.ma.getmaskarray(slope))
 
     #Get final mask after filtering
-    static_mask = np.ma.getmaskarray(diff_euler)
+    static_mask = np.ma.getmaskarray(diff)
 
     #Compute stats for new masked difference map
     print("Filtered difference map")
-    diff_stats = malib.print_stats(diff_euler)
+    diff_stats = malib.print_stats(diff)
     dz = diff_stats[5]
 
     print("Computing sub-pixel offset between DEMs using mode: %s" % mode)
@@ -141,7 +141,7 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
     #Nuth and Kaab (2011)
     elif mode == "nuth":
         #Compute relationship between elevation difference, slope and aspect
-        fit_param, fig = coreglib.compute_offset_nuth(diff_euler, slope, aspect, plot=plot)
+        fit_param, fig = coreglib.compute_offset_nuth(diff, slope, aspect, plot=plot)
         if fit_param is None:
             print("Failed to calculate horizontal shift")
         else:
@@ -323,23 +323,23 @@ def main(argv=None):
                 src_dem_align = iolib.ds_getma(src_dem_clip_ds_align, 1)
                 ref_dem_clip_ds_align = None
 
-                diff_euler_align = src_dem_align - ref_dem_align
+                diff_align = src_dem_align - ref_dem_align
                 src_dem_align = None
                 ref_dem_align = None
 
                 #Get updated, final mask
                 static_mask_final = get_mask(src_dem_clip_ds_align, mask_list, src_dem_fn)
-                static_mask_final = np.logical_or(np.ma.getmaskarray(diff_euler_align), static_mask_final)
+                static_mask_final = np.logical_or(np.ma.getmaskarray(diff_align), static_mask_final)
 
                 #Prepare filtered version for tiltcorr fit
-                diff_euler_align_filt = np.ma.array(diff_euler_align, mask=static_mask_final)
-                #diff_euler_align_filt = outlier_filter(diff_euler_align_filt, f=3, max_dz=max_dz)
-                diff_euler_align_filt = outlier_filter(diff_euler_align_filt, perc=(12.5, 87.5), max_dz=max_dz)
+                diff_align_filt = np.ma.array(diff_align, mask=static_mask_final)
+                #diff_align_filt = outlier_filter(diff_align_filt, f=3, max_dz=max_dz)
+                diff_align_filt = outlier_filter(diff_align_filt, perc=(12.5, 87.5), max_dz=max_dz)
                 slope = get_slope(src_dem_clip_ds_align)
-                diff_euler_align_filt = np.ma.array(diff_euler_align_filt, mask=np.ma.getmaskarray(slope))
+                diff_align_filt = np.ma.array(diff_align_filt, mask=np.ma.getmaskarray(slope))
 
-                diff_euler_align_compressed = diff_euler_align[~static_mask_final]
-                diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
+                diff_align_compressed = diff_align[~static_mask_final]
+                diff_align_stats = np.array(malib.print_stats(diff_align_compressed))
 
             #Fit 2D polynomial to residuals and remove
             #To do: add support for along-track and cross-track artifacts
@@ -351,8 +351,8 @@ def main(argv=None):
 
                 #Need to apply the mask here, so we're only fitting over static surfaces
                 #Note that the origmask=False will compute vals for all x and y indices, which is what we want
-                vals, resid, coeff = geolib.ma_fitpoly(diff_euler_align_filt, order=1, gt=gt, perc=(0,100), origmask=False)
-                #vals, resid, coeff = geolib.ma_fitplane(diff_euler_align_filt, gt, perc=(12.5, 87.5), origmask=False)
+                vals, resid, coeff = geolib.ma_fitpoly(diff_align_filt, order=1, gt=gt, perc=(0,100), origmask=False)
+                #vals, resid, coeff = geolib.ma_fitplane(diff_align_filt, gt, perc=(12.5, 87.5), origmask=False)
 
                 #Should write out coeff or grid with correction 
 
@@ -371,13 +371,13 @@ def main(argv=None):
                 #valgrid = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
                 src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, -valgrid, createcopy=False)
 
-                #diff_euler_align_compressed = diff_euler_align[~static_mask_final].compressed()
-                #diff_euler_align_stats = np.array(malib.print_stats(diff_euler_align_compressed))
+                #diff_align_compressed = diff_align[~static_mask_final].compressed()
+                #diff_align_stats = np.array(malib.print_stats(diff_align_compressed))
                 if True:
                     print("Creating plot of polynomial fit to residuals")
                     fig, axa = plt.subplots(1,2, figsize=(8, 4))
                     dz_clim = malib.calcperc_sym(vals, (2, 98))
-                    ax = pltlib.iv(diff_euler_align_filt, ax=axa[0], cmap='RdBu', clim=dz_clim, \
+                    ax = pltlib.iv(diff_align_filt, ax=axa[0], cmap='RdBu', clim=dz_clim, \
                             label='Residual dz (m)', scalebar=False)
                     ax = pltlib.iv(valgrid, ax=axa[1], cmap='RdBu', clim=dz_clim, \
                             label='Polyfit dz (m)', ds=src_dem_ds_align)
@@ -388,7 +388,7 @@ def main(argv=None):
                     fig.savefig(tiltcorr_fig_fn, dpi=300)
 
                 print("Applying tilt correction to difference map")
-                diff_euler_align -= vals
+                diff_align -= vals
 
                 #Should iterate until tilts are below some threshold
                 #For now, only do one tiltcorr
@@ -400,10 +400,10 @@ def main(argv=None):
                 break
 
     if True:
-        #Write out aligned eulerian difference map for clipped extent with vertial offset removed
-        align_eul_fn = outprefix + '%s_align_dz_eul.tif' % xyz_shift_str_cum_fn
+        #Write out aligned difference map for clipped extent with vertial offset removed
+        align_diff_fn = outprefix + '%s_align_diff.tif' % xyz_shift_str_cum_fn
         print("Writing out aligned difference map with median vertical offset removed")
-        iolib.writeGTiff(diff_euler_align, align_eul_fn, src_dem_clip_ds_align)
+        iolib.writeGTiff(diff_align, align_diff_fn, src_dem_clip_ds_align)
         src_dem_clip_ds_align = None
 
     #Write out final aligned src_dem 
@@ -428,19 +428,19 @@ def main(argv=None):
         ref_dem_hs = geolib.gdaldem_mem_ds(ref_dem_clip_ds, processing='hillshade', returnma=True, computeEdges=True)
         src_dem_hs = geolib.gdaldem_mem_ds(src_dem_clip_ds, processing='hillshade', returnma=True, computeEdges=True)
         res = float(geolib.get_res(ref_dem_clip_ds, square=True)[0])
-        diff_euler_orig = src_dem_orig - ref_dem_orig
+        diff_orig = src_dem_orig - ref_dem_orig
         #Only compute stats over valid surfaces
         static_mask_orig = get_mask(src_dem_clip_ds, mask_list, src_dem_fn)
         #Note: this doesn't include outlier removal or slope mask!
-        static_mask_orig = np.logical_or(np.ma.getmaskarray(diff_euler_orig), static_mask_orig)
+        static_mask_orig = np.logical_or(np.ma.getmaskarray(diff_orig), static_mask_orig)
         #For some reason, ASTER DEM diff have a spike near the 0 bin, could be an issue with masking?
-        diff_euler_orig_compressed = diff_euler_orig[~static_mask_orig]
-        diff_euler_orig_stats = np.array(malib.print_stats(diff_euler_orig_compressed))
+        diff_orig_compressed = diff_orig[~static_mask_orig]
+        diff_orig_stats = np.array(malib.print_stats(diff_orig_compressed))
 
-        #Write out original eulerian difference map
-        print("Writing out original euler difference map for common intersection before alignment")
-        orig_eul_fn = outprefix + '_orig_dz_eul.tif'
-        iolib.writeGTiff(diff_euler_orig, orig_eul_fn, ref_dem_clip_ds)
+        #Write out original difference map
+        print("Writing out original difference map for common intersection before alignment")
+        orig_diff_fn = outprefix + '_orig_diff.tif'
+        iolib.writeGTiff(diff_orig, orig_diff_fn, ref_dem_clip_ds)
         src_dem_clip_ds = None
         ref_dem_clip_ds = None
 
@@ -465,20 +465,20 @@ def main(argv=None):
         #axa[0,2].imshow(~static_mask_orig, clim=(0,1), cmap='gray')
         axa[0,2].imshow(~static_mask, clim=(0,1), cmap='gray')
         axa[0,2].set_title('Surfaces for co-registration')
-        dz_clim = malib.calcperc_sym(diff_euler_orig_compressed, (5, 95))
-        im = axa[1,0].imshow(diff_euler_orig, cmap='RdBu', clim=dz_clim)
-        pltlib.add_cbar(axa[1,0], im, arr=diff_euler_orig, clim=dz_clim, label=None)
+        dz_clim = malib.calcperc_sym(diff_orig_compressed, (5, 95))
+        im = axa[1,0].imshow(diff_orig, cmap='RdBu', clim=dz_clim)
+        pltlib.add_cbar(axa[1,0], im, arr=diff_orig, clim=dz_clim, label=None)
         axa[1,0].set_title('Elev. Diff. Before (m)')
-        im = axa[1,1].imshow(diff_euler_align, cmap='RdBu', clim=dz_clim)
-        pltlib.add_cbar(axa[1,1], im, arr=diff_euler_align, clim=dz_clim, label=None)
+        im = axa[1,1].imshow(diff_align, cmap='RdBu', clim=dz_clim)
+        pltlib.add_cbar(axa[1,1], im, arr=diff_align, clim=dz_clim, label=None)
         axa[1,1].set_title('Elev. Diff. After (m)')
 
         #tight_dz_clim = (-1.0, 1.0)
         #tight_dz_clim = (-2.0, 2.0)
         tight_dz_clim = (-10.0, 10.0)
-        #tight_dz_clim = malib.calcperc_sym(diff_euler_align_filt, (5, 95))
-        im = axa[1,2].imshow(diff_euler_align_filt, cmap='RdBu', clim=tight_dz_clim)
-        pltlib.add_cbar(axa[1,2], im, arr=diff_euler_align_filt, clim=tight_dz_clim, label=None)
+        #tight_dz_clim = malib.calcperc_sym(diff_align_filt, (5, 95))
+        im = axa[1,2].imshow(diff_align_filt, cmap='RdBu', clim=tight_dz_clim)
+        pltlib.add_cbar(axa[1,2], im, arr=diff_align_filt, clim=tight_dz_clim, label=None)
         axa[1,2].set_title('Elev. Diff. After (m)')
 
         #Tried to insert Nuth fig here
@@ -486,19 +486,19 @@ def main(argv=None):
         #f.axes.append(ax_nuth)
 
         bins = np.linspace(dz_clim[0], dz_clim[1], 128)
-        axa[1,3].hist(diff_euler_orig_compressed, bins, color='g', label='Before', alpha=0.5)
-        axa[1,3].hist(diff_euler_align_compressed, bins, color='b', label='After', alpha=0.5)
+        axa[1,3].hist(diff_orig_compressed, bins, color='g', label='Before', alpha=0.5)
+        axa[1,3].hist(diff_align_compressed, bins, color='b', label='After', alpha=0.5)
         axa[1,3].set_xlim(*dz_clim)
         axa[1,3].axvline(0, color='k', linewidth=0.5, linestyle=':')
         axa[1,3].set_xlabel('Elev. Diff. (m)')
         axa[1,3].set_ylabel('Count (px)')
         axa[1,3].set_title("Source - Reference")
         #axa[1,2].legend(loc='upper right')
-        #before_str = 'Before\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((3,4,5,6))])
-        #after_str = 'After\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((3,4,5,6))])
-        before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_orig_stats[np.array((5,6))])
+        #before_str = 'Before\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_orig_stats[np.array((3,4,5,6))])
+        #after_str = 'After\nmean: %0.2f\nstd: %0.2f\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_align_stats[np.array((3,4,5,6))])
+        before_str = 'Before\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_orig_stats[np.array((5,6))])
         axa[1,3].text(0.05, 0.95, before_str, va='top', color='g', transform=axa[1,3].transAxes, fontsize=8)
-        after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_euler_align_stats[np.array((5,6))])
+        after_str = 'After\nmed: %0.2f\nnmad: %0.2f' % tuple(diff_align_stats[np.array((5,6))])
         axa[1,3].text(0.65, 0.95, after_str, va='top', color='b', transform=axa[1,3].transAxes, fontsize=8)
 
         #This is empty

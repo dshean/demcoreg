@@ -164,7 +164,7 @@ elif [ ${dem##*.} = 'tif' ] ; then
     #Gridded geotif
     else
         dem_type='grid'
-        #Can used compute_dz.py here
+        #Can used compute_diff.py here
         use_point2dem=false
         usemask=true
         dem_res=$(gdalinfo $dem | grep 'Pixel Size' | awk -F'[(,)]' '{print $2}')
@@ -285,21 +285,21 @@ function sample () {
         fi
     elif [ "${ref##*.}" == "tif" ] ; then
         echo "Computing elevation difference" | tee -a $logfile
-        #This will print eul stats, which is what we want
-        cmd="compute_dz.py $ref $dem"
+        #This will print diff stats, which is what we want
+        cmd="compute_diff.py $ref $dem"
         runcmd "$cmd" $logfile
-        eul=${ref%.*}_$(basename ${dem%.*})_dz_eul.tif
-        if [ ! -e $eul ] ; then
+        diff=${ref%.*}_$(basename ${dem%.*})_diff.tif
+        if [ ! -e $diff ] ; then
             echo "No valid samples!" | tee -a $logfile
             exit 1
         else
-            cmd="robust_stats.py $eul"
+            cmd="robust_stats.py $diff"
             runcmd "$cmd" $logfile
         fi
-        if [ -e ${eul%.*}_rate.tif ] ; then
-            rm -v ${eul%.*}_rate.tif 
+        if [ -e ${diff%.*}_rate.tif ] ; then
+            rm -v ${diff%.*}_rate.tif 
         fi
-        mv -v $eul $outdir 
+        mv -v $diff $outdir 
     fi
 }
 
