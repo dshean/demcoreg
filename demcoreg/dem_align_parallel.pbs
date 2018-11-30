@@ -4,7 +4,7 @@
 ### Note: parallel cannot efficiently spawn jobs to many nodes if they finish in <30 sec, scale accordingly
 ##PBS -lselect=64:model=ivy
 ##PBS -lselect=24:model=has
-#PBS -lselect=64:model=bro
+#PBS -lselect=20:model=bro
 #PBS -lwalltime=2:00:00
 #PBS -q devel 
 
@@ -85,14 +85,14 @@ fi
 #ASTER
 fn_list=$(ls -H -S 2*/*DEM_cr.tif | shuf)
 #ASTER uses limited memory, maybe 0.5 GB each
-parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
+parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
 
 #Do tiltcorr with crosstrack
 ##fn_list=$(ll -H -S *DEM_8m_dzfilt*.tif | grep 'alongtrack' | awk '{print $9}')
 
 #fn_list=$(ls -H -S *track/*DEM_8m_dzfilt*.tif | shuf)
-#parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem {} | tee $log/{.}.log; fi" ::: $fn_list
-#parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem {} -tiltcorr | tee $log/{.}.log; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res common_scale_factor $refdem {} > $log/{/.}.log 2>&1; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}.log 2>&1; fi" ::: $fn_list
 
 #For ASTER, now run abs_dz filter after co-registration
 #fn_list=$(ls -S 2*/*align/*align.tif)
