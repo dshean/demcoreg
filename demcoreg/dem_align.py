@@ -185,6 +185,9 @@ def getparser():
             help='Maximum expected horizontal offset in meters')
     parser.add_argument('-max_dz', type=float, default=100, \
             help='Maximum expected vertical offset in meters, used to filter outliers')
+    res_choices = ['min', 'max', 'mean', 'common_scale_factor']
+    parser.add_argument('-res', type=str, default='mean', choices=res_choices, \
+            help='Warp intputs to this resolution') 
     parser.add_argument('-slope_lim', type=float, nargs=2, default=(0.1, 40), \
             help='Minimum and maximum surface slope limits to consider')
     parser.add_argument('-max_iter', type=int, default=30, \
@@ -246,20 +249,13 @@ def main(argv=None):
     #local_srs = geolib.localtmerc_ds(src_dem_ds)
     local_srs = geolib.get_ds_srs(src_dem_ds)
 
-    #Resample ref to match src DEM
+    #Resample to common grid
+    ref_dem_ds = gdal.Open(ref_dem_fn)
     #Create a copy to be updated in place
     src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
-    ref_dem_ds = warplib.memwarp_multi_fn([ref_dem_fn,], res=src_dem_ds_align, extent=src_dem_ds_align, t_srs=local_srs, r='cubic')[0]
-    
-    #Keep everything at low res
-    #src_dem_ds_align = warplib.memwarp_multi_fn([src_dem_fn,], t_srs=local_srs, r='cubic')[0]
-    #ref_dem_ds = gdal.Open(ref_dem_fn) 
-
-    #Resample both to average of the two
-    #ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='mean', r='cubic')
-
-    #Resample both to min of the two
-    #ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi_fn([ref_dem_fn, src_dem_fn], t_srs=local_srs, res='min', r='cubic')
+    #Resample to user-specified resolution
+    ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi([ref_dem_ds, src_dem_ds_align], \
+            extent='intersection', res=args.res, t_srs=local_srs, r='cubic')
 
     #Iteration number
     n = 1
@@ -305,6 +301,7 @@ def main(argv=None):
         #if n > max_iter or (abs(dx) <= min_dx and abs(dy) <= min_dy and abs(dz) <= min_dz):
         #If magnitude of shift is less than tol
         dm = np.sqrt(dx**2 + dy**2 + dz**2)
+        dm_total = np.sqrt(dx_total**2 + dy_total**2 + dz_total**2)
 
         #Stop iteration
         if n > max_iter or dm < tol:
@@ -358,7 +355,7 @@ def main(argv=None):
 
                 #Should write out coeff or grid with correction 
 
-                vals_stats = malib.print_stats(vals)
+                vals_stats = malib.get_stats_dict(vals)
 
                 #Want to have max_tilt check here
                 #max_tilt = 4.0 #m
@@ -404,7 +401,17 @@ def main(argv=None):
         align_diff_fn = outprefix + '%s_align_diff.tif' % xyz_shift_str_cum_fn
         print("Writing out aligned difference map with median vertical offset removed")
         iolib.writeGTiff(diff_align, align_diff_fn, src_dem_clip_ds_align)
-        src_dem_clip_ds_align = None
+
+    if True:
+        #Write out fitered aligned difference map
+        align_diff_fn = outprefix + '%s_align_diff_filt.tif' % xyz_shift_str_cum_fn
+        print("Writing out filtered aligned difference map with median vertical offset removed")
+        iolib.writeGTiff(diff_align_filt, align_diff_fn, src_dem_clip_ds_align)
+
+    #Extract final center coordinates for intersection
+    center_coord_ll = geolib.get_center(src_dem_clip_ds_align, t_srs=geolib.wgs_srs)
+    center_coord_xy = geolib.get_center(src_dem_clip_ds_align)
+    src_dem_clip_ds_align = None
 
     #Write out final aligned src_dem 
     align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum_fn
@@ -458,6 +465,14 @@ def main(argv=None):
         align_stats['src_fn'] = src_dem_fn 
         align_stats['ref_fn'] = ref_dem_fn 
         align_stats['align_fn'] = align_fn 
+        align_stats['center_coord'] = {'lon':center_coord_ll[0], 'lat':center_coord_ll[1], \
+                'x':center_coord_xy[0], 'y':center_coord_xy[1]}
+        align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':dz_total, 'dm':dm_total}
+        #This tiltcorr flag gets set to false, need better flag
+        if tiltcorr:
+            align_stats['tiltcorr'] = {}
+            align_stats['tiltcorr']['coeff'] = coeff
+            align_stats['tiltcorr']['val_stats'] = vals_stats
         align_stats['before'] = diff_orig_stats
         align_stats['before_filt'] = diff_orig_filt_stats
         align_stats['after'] = diff_align_stats
