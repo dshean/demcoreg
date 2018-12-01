@@ -209,6 +209,7 @@ def main(argv=None):
     max_dz = args.max_dz
     slope_lim = args.slope_lim
     tiltcorr = args.tiltcorr
+    res = args.res
 
     #Maximum number of iterations
     max_iter = args.max_iter
@@ -219,17 +220,17 @@ def main(argv=None):
     min_dy = tol
     min_dz = tol
 
-    #Relax tolerance for initial round of co-registration
-    if tiltcorr:
-        tiltcorr_tol = 0.1
-        if tol < tiltcorr_tol:
-            tol = tiltcorr_tol
-
     outdir = args.outdir
     if outdir is None:
         outdir = os.path.splitext(src_dem_fn)[0] + '_dem_align'
-        if tiltcorr:
-            outdir += '_tiltcorr'
+
+    #Relax tolerance for initial round of co-registration
+    if tiltcorr:
+        outdir += '_tiltcorr'
+        tiltcorr_done = False
+        tiltcorr_tol = 0.1
+        if tol < tiltcorr_tol:
+            tol = tiltcorr_tol
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -247,15 +248,25 @@ def main(argv=None):
 
     #Get local cartesian coordinate system
     #local_srs = geolib.localtmerc_ds(src_dem_ds)
+    #Use original source dataset coordinate system
+    #Potentially issues with distortion and xyz/tiltcorr offsets for DEM with large extent
     local_srs = geolib.get_ds_srs(src_dem_ds)
 
     #Resample to common grid
     ref_dem_ds = gdal.Open(ref_dem_fn)
+    ref_dem_res = float(geolib.get_res(ref_dem_ds, t_srs=local_srs, square=True)[0])
     #Create a copy to be updated in place
     src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
+    src_dem_res = float(geolib.get_res(src_dem_ds, t_srs=local_srs, square=True)[0])
+    src_dem_ds = None
     #Resample to user-specified resolution
     ref_dem_ds, src_dem_ds_align = warplib.memwarp_multi([ref_dem_ds, src_dem_ds_align], \
             extent='intersection', res=args.res, t_srs=local_srs, r='cubic')
+
+    res = float(geolib.get_res(src_dem_ds_align, square=True)[0])
+    print("\nReference DEM res: %0.2f" % ref_dem_res)
+    print("Source DEM res: %0.2f" % src_dem_res)
+    print("Resolution for coreg: %s (%0.2f m)\n" % (args.res, res))
 
     #Iteration number
     n = 1
@@ -283,7 +294,7 @@ def main(argv=None):
 
         #Should make an animation of this converging
         if n == 1: 
-            static_mask_orig = static_mask
+            #static_mask_orig = static_mask
             if fig is not None:
                 dst_fn = outprefix + '_%s_iter%02i_plot.png' % (mode, n)
                 print("Writing offset plot: %s" % dst_fn)
@@ -315,7 +326,7 @@ def main(argv=None):
             #Compute final elevation difference
             if True:
                 ref_dem_clip_ds_align, src_dem_clip_ds_align = warplib.memwarp_multi([ref_dem_ds, src_dem_ds_align], \
-                        res='max', extent='intersection', t_srs=local_srs, r='cubic')
+                        res=res, extent='intersection', t_srs=local_srs, r='cubic')
                 ref_dem_align = iolib.ds_getma(ref_dem_clip_ds_align, 1)
                 src_dem_align = iolib.ds_getma(src_dem_clip_ds_align, 1)
                 ref_dem_clip_ds_align = None
@@ -342,7 +353,7 @@ def main(argv=None):
 
             #Fit 2D polynomial to residuals and remove
             #To do: add support for along-track and cross-track artifacts
-            if tiltcorr:
+            if tiltcorr and not tiltcorr_done:
                 print("\n************")
                 print("Calculating planar tilt correction")
                 print("************\n")
@@ -389,7 +400,7 @@ def main(argv=None):
 
                 #Should iterate until tilts are below some threshold
                 #For now, only do one tiltcorr
-                tiltcorr=False
+                tiltcorr_done=True
                 #Now use original tolerance, and number of iterations 
                 tol = args.tol
                 max_iter = n + args.max_iter
@@ -415,26 +426,37 @@ def main(argv=None):
 
     #Write out final aligned src_dem 
     align_fn = outprefix + '%s_align.tif' % xyz_shift_str_cum_fn
-    if True:
-        print("Writing out shifted src_dem with median vertical offset removed: %s" % align_fn)
-        #Might be cleaner way to write out MEM ds directly to disk
-        src_dem_align = iolib.ds_getma(src_dem_ds_align)
-        iolib.writeGTiff(src_dem_align, align_fn, src_dem_ds_align)
-        src_dem_align = None
-        src_dem_ds_align = None
+    print("Writing out shifted src_dem with median vertical offset removed: %s" % align_fn)
+    #Open original uncorrected dataset at native resolution
+    src_dem_ds = gdal.Open(src_dem_fn)
+    src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
+    #Apply final horizontal and vertial shift to the original dataset
+    #Note: potentially issues if we used a different projection during coregistration!
+    src_dem_ds_align = coreglib.apply_xy_shift(src_dem_ds_align, dx_total, dy_total, createcopy=False)
+    src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, dz, createcopy=False)
+    if tiltcorr:
+        xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align)
+        valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
+        #For results of ma_fitplane
+        #valgrid = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
+        src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, -valgrid, createcopy=False)
+    #Might be cleaner way to write out MEM ds directly to disk
+    src_dem_full_align = iolib.ds_getma(src_dem_ds_align)
+    iolib.writeGTiff(src_dem_full_align, align_fn, src_dem_ds_align)
+    src_dem_full_align = None
+    src_dem_ds_align = None
 
     #Compute original elevation difference
     if True:
-        src_dem_ds = gdal.Open(src_dem_fn)
         ref_dem_clip_ds, src_dem_clip_ds = warplib.memwarp_multi([ref_dem_ds, src_dem_ds], \
-                res='max', extent='intersection', t_srs=local_srs, r='cubic')
+                res=res, extent='intersection', t_srs=local_srs, r='cubic')
         src_dem_ds = None
+        ref_dem_ds = None
         ref_dem_orig = iolib.ds_getma(ref_dem_clip_ds)
         src_dem_orig = iolib.ds_getma(src_dem_clip_ds)
         #Needed for plotting
         ref_dem_hs = geolib.gdaldem_mem_ds(ref_dem_clip_ds, processing='hillshade', returnma=True, computeEdges=True)
         src_dem_hs = geolib.gdaldem_mem_ds(src_dem_clip_ds, processing='hillshade', returnma=True, computeEdges=True)
-        res = float(geolib.get_res(ref_dem_clip_ds, square=True)[0])
         diff_orig = src_dem_orig - ref_dem_orig
         #Only compute stats over valid surfaces
         static_mask_orig = get_mask(src_dem_clip_ds, mask_list, src_dem_fn)
@@ -465,6 +487,10 @@ def main(argv=None):
         align_stats['src_fn'] = src_dem_fn 
         align_stats['ref_fn'] = ref_dem_fn 
         align_stats['align_fn'] = align_fn 
+        align_stats['res'] = {} 
+        align_stats['res']['src'] = src_dem_res
+        align_stats['res']['ref'] = ref_dem_res
+        align_stats['res']['coreg'] = res
         align_stats['center_coord'] = {'lon':center_coord_ll[0], 'lat':center_coord_ll[1], \
                 'x':center_coord_xy[0], 'y':center_coord_xy[1]}
         align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':dz_total, 'dm':dm_total}
@@ -512,8 +538,8 @@ def main(argv=None):
         axa[1,1].set_title('Elev. Diff. After (m)')
 
         #tight_dz_clim = (-1.0, 1.0)
-        #tight_dz_clim = (-2.0, 2.0)
-        tight_dz_clim = (-10.0, 10.0)
+        tight_dz_clim = (-2.0, 2.0)
+        #tight_dz_clim = (-10.0, 10.0)
         #tight_dz_clim = malib.calcperc_sym(diff_align_filt, (5, 95))
         im = axa[1,2].imshow(diff_align_filt, cmap='RdBu', clim=tight_dz_clim)
         pltlib.add_cbar(axa[1,2], im, arr=diff_align_filt, clim=tight_dz_clim, label=None)
