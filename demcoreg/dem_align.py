@@ -415,9 +415,9 @@ def main(argv=None):
 
     if True:
         #Write out fitered aligned difference map
-        align_diff_fn = outprefix + '%s_align_diff_filt.tif' % xyz_shift_str_cum_fn
+        align_diff_filt_fn = outprefix + '%s_align_diff_filt.tif' % xyz_shift_str_cum_fn
         print("Writing out filtered aligned difference map with median vertical offset removed")
-        iolib.writeGTiff(diff_align_filt, align_diff_fn, src_dem_clip_ds_align)
+        iolib.writeGTiff(diff_align_filt, align_diff_filt_fn, src_dem_clip_ds_align)
 
     #Extract final center coordinates for intersection
     center_coord_ll = geolib.get_center(src_dem_clip_ds_align, t_srs=geolib.wgs_srs)
@@ -443,6 +443,20 @@ def main(argv=None):
     #Might be cleaner way to write out MEM ds directly to disk
     src_dem_full_align = iolib.ds_getma(src_dem_ds_align)
     iolib.writeGTiff(src_dem_full_align, align_fn, src_dem_ds_align)
+
+    if True:
+        #Output final aligned src_dem, masked so only best pixels are preserved
+        #Useful if creating a new reference product
+        #Can also use apply_mask.py 
+        print("Applying filter to shiftec src_dem")
+        align_diff_filt_full_ds = warplib.memwarp_multi_fn([align_diff_filt_fn,], res=src_dem_ds_align, extent=src_dem_ds_align, \
+                t_srs=src_dem_ds_align)[0]
+        align_diff_filt_full = iolib.ds_getma(align_diff_filt_full_ds)
+        align_diff_filt_full_ds = None
+        align_fn_masked = outprefix + '%s_align_filt.tif' % xyz_shift_str_cum_fn
+        iolib.writeGTiff(np.ma.array(src_dem_full_align, mask=np.ma.getmaskarray(align_diff_filt_full)), \
+                align_fn_masked, src_dem_ds_align)
+
     src_dem_full_align = None
     src_dem_ds_align = None
 
