@@ -511,7 +511,7 @@ def main(argv=None):
         #This tiltcorr flag gets set to false, need better flag
         if tiltcorr:
             align_stats['tiltcorr'] = {}
-            align_stats['tiltcorr']['coeff'] = coeff
+            align_stats['tiltcorr']['coeff'] = coeff.tolist()
             align_stats['tiltcorr']['val_stats'] = vals_stats
         align_stats['before'] = diff_orig_stats
         align_stats['before_filt'] = diff_orig_filt_stats
