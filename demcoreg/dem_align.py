@@ -20,6 +20,9 @@ from demcoreg import coreglib, dem_mask
 
 from imview.lib import pltlib
 
+#Turn off numpy multithreading
+#os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
 def get_mask(ds, mask_list, dem_fn=None):
     #This returns True (1) for areas to mask, False (0) for valid static surfaces
     static_mask = dem_mask.get_mask(ds, mask_list, dem_fn, writeout=False)
@@ -178,11 +181,13 @@ def getparser():
     parser.add_argument('-mask_list', nargs='+', type=str, default=['glaciers',], choices=dem_mask.mask_choices, \
             help='Define masks to use to limit reference surfaces for co-registration')
     parser.add_argument('-tiltcorr', action='store_true', \
-            help='After preliminary translation, fit polynomial (order 1) to residual elevation offsets and remove')
+            help='After preliminary translation, fit 2D polynomial to residual elevation offsets and remove')
+    parser.add_argument('-polyorder', type=int, default=1, \
+            help='Specify order of 2D polynomial fit') 
     parser.add_argument('-tol', type=float, default=0.02, \
             help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM')
     parser.add_argument('-max_offset', type=float, default=100, \
-            help='Maximum expected horizontal offset in meters')
+            help='Maximum expected horizontal offset in meters, used to set search range for ncc and sad modes')
     parser.add_argument('-max_dz', type=float, default=100, \
             help='Maximum expected vertical offset in meters, used to filter outliers')
     res_choices = ['min', 'max', 'mean', 'common_scale_factor']
@@ -207,8 +212,9 @@ def main(argv=None):
     mask_list = args.mask_list
     max_offset = args.max_offset
     max_dz = args.max_dz
-    slope_lim = args.slope_lim
+    slope_lim = tuple(args.slope_lim)
     tiltcorr = args.tiltcorr
+    polyorder = args.polyorder
     res = args.res
 
     #Maximum number of iterations
@@ -224,13 +230,13 @@ def main(argv=None):
     if outdir is None:
         outdir = os.path.splitext(src_dem_fn)[0] + '_dem_align'
 
-    #Relax tolerance for initial round of co-registration
     if tiltcorr:
         outdir += '_tiltcorr'
         tiltcorr_done = False
-        tiltcorr_tol = 0.1
-        if tol < tiltcorr_tol:
-            tol = tiltcorr_tol
+        #Relax tolerance for initial round of co-registration
+        #tiltcorr_tol = 0.1
+        #if tol < tiltcorr_tol:
+        #    tol = tiltcorr_tol
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -245,15 +251,16 @@ def main(argv=None):
     print("Output: %s\n" % outprefix)
 
     src_dem_ds = gdal.Open(src_dem_fn)
+    ref_dem_ds = gdal.Open(ref_dem_fn)
 
     #Get local cartesian coordinate system
     #local_srs = geolib.localtmerc_ds(src_dem_ds)
     #Use original source dataset coordinate system
     #Potentially issues with distortion and xyz/tiltcorr offsets for DEM with large extent
     local_srs = geolib.get_ds_srs(src_dem_ds)
+    #local_srs = geolib.get_ds_srs(ref_dem_ds)
 
     #Resample to common grid
-    ref_dem_ds = gdal.Open(ref_dem_fn)
     ref_dem_res = float(geolib.get_res(ref_dem_ds, t_srs=local_srs, square=True)[0])
     #Create a copy to be updated in place
     src_dem_ds_align = iolib.mem_drv.CreateCopy('', src_dem_ds, 0)
@@ -314,6 +321,9 @@ def main(argv=None):
         dm = np.sqrt(dx**2 + dy**2 + dz**2)
         dm_total = np.sqrt(dx_total**2 + dy_total**2 + dz_total**2)
 
+        if dm_total > max_offset:
+            sys.exit("Total offset exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % max_offset)
+
         #Stop iteration
         if n > max_iter or dm < tol:
 
@@ -355,13 +365,13 @@ def main(argv=None):
             #To do: add support for along-track and cross-track artifacts
             if tiltcorr and not tiltcorr_done:
                 print("\n************")
-                print("Calculating planar tilt correction")
+                print("Calculating 'tiltcorr' 2D polynomial fit to residuals with order %i" % polyorder)
                 print("************\n")
                 gt = src_dem_clip_ds_align.GetGeoTransform()
 
                 #Need to apply the mask here, so we're only fitting over static surfaces
                 #Note that the origmask=False will compute vals for all x and y indices, which is what we want
-                vals, resid, coeff = geolib.ma_fitpoly(diff_align_filt, order=1, gt=gt, perc=(0,100), origmask=False)
+                vals, resid, coeff = geolib.ma_fitpoly(diff_align_filt, order=polyorder, gt=gt, perc=(0,100), origmask=False)
                 #vals, resid, coeff = geolib.ma_fitplane(diff_align_filt, gt, perc=(12.5, 87.5), origmask=False)
 
                 #Should write out coeff or grid with correction 
