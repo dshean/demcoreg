@@ -94,7 +94,7 @@ def main():
 
     print("Warping rasters to same res/extent/proj")
     #This will check input param for validity, could do beforehand
-    ds_list = warplib.memwarp_multi_fn(fn_list, extent=args.te, res=args.tr, t_srs=args.t_srs)
+    ds_list = warplib.memwarp_multi_fn(fn_list, extent=args.te, res=args.tr, t_srs=args.t_srs, r='cubic')
     r1_ds = ds_list[0]
     r2_ds = ds_list[1]
 
