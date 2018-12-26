@@ -443,7 +443,7 @@ def main(argv=None):
     #Apply final horizontal and vertial shift to the original dataset
     #Note: potentially issues if we used a different projection during coregistration!
     src_dem_ds_align = coreglib.apply_xy_shift(src_dem_ds_align, dx_total, dy_total, createcopy=False)
-    src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, dz, createcopy=False)
+    src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, dz_total, createcopy=False)
     if tiltcorr:
         xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align)
         valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
