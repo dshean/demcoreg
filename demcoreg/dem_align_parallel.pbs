@@ -46,10 +46,12 @@ export GDAL_MAX_DATASET_POOL_SIZE=32768
 
 refdem=/nobackupp8/deshean/hma/aster/dsm/mos/hma_20181206_mos/hma_mos_13/hma_mos_13_median.vrt
 
+refdem=/nobackup/deshean/hma/dem_coreg/mos/hma_20181209_mos/hma_wvge_mos_13arcsec/hma_wvge_mos_13arcsec_median_masked.vrt
+
 #WVGE
-#topdir=/nobackup/deshean/hma/dem_coreg
+topdir=/nobackup/deshean/hma/dem_coreg
 #ASTER
-topdir=/nobackup/deshean/hma/aster/dsm
+#topdir=/nobackup/deshean/hma/aster/dsm
 
 #CONUS
 #refdem=/nobackup/deshean/data/nasadem/conus/hgt_merge/hgt/conus_nasadem_hgt_merge_hgt_adj.vrt
@@ -118,12 +120,13 @@ if [ ! -d $log ] ; then
 fi
 
 #fn_list=$(ls -H -S alongtrack/2*align/*DEM_8m_dzfilt*align.tif | shuf)
-#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1; fi" ::: $fn_list
+fn_list=$(ls -H -S -U *track/2*align/*DEM_8m_dzfilt*align.tif | shuf)
+parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1; fi" ::: $fn_list
 ##parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}.log 2>&1; fi" ::: $fn_list
 
-fn_list=$(ls -H -S 2*/AST*DEM_cr_dem_align/*align.tif | shuf)
+#fn_list=$(ls -H -S 2*/AST*DEM_cr_dem_align/*align.tif | shuf)
 #ASTER uses limited memory, maybe 0.5 GB each
-parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
+#parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
 
 #For ASTER, now run abs_dz filter after co-registration
 #fn_list=$(ls -S 2*/*align/*align.tif)
