@@ -2,7 +2,7 @@
 Python and shell scripts for co-registration of rasters, specifically digital elevation models (DEMs).
 
 ## Overview
-All DEMs have some horizontal and vertical geolocation error.  It is important to remove relative offsets when differencing multiple DEMs for elevation change analyses.  These tools offer several options to solve this problem.  Most solve for the sub-pixel horizontal shift and vertical offset required to minimize errors over "static" control surfaces.  The ASP pc_align tool can also solve for more complex transformations with rotations and scaling.  
+All DEMs have some horizontal and vertical geolocation error.  It is important to remove relative offsets when differencing multiple DEMs for elevation change analyses.  These tools offer several options to solve this problem.  Most solve for the sub-pixel horizontal shift and vertical offset required to minimize errors over "static" control surfaces.  The ASP pc_align tool can also solve for more complex transformations with rotations and scaling. 
 
 ## Features
 - Multiple co-registration algorithms (ICP, NCC, SAD, Nuth and Kaab [2011])
