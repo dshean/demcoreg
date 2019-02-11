@@ -4,9 +4,10 @@
 ### Note: parallel cannot efficiently spawn jobs to many nodes if they finish in <30 sec, scale accordingly
 ##PBS -lselect=64:model=ivy
 ##PBS -lselect=24:model=has
-#PBS -lselect=64:model=bro
-#PBS -lwalltime=2:00:00
-#PBS -q devel 
+#PBS -lselect=48:model=bro
+#PBS -lwalltime=4:00:00
+##PBS -q devel 
+#PBS -q long 
 #Email
 #PBS -m abe
 ##Join stdout and stderr
@@ -41,23 +42,27 @@ export GDAL_MAX_DATASET_POOL_SIZE=32768
 #refdem=/nobackup/deshean/data/nasadem/hma/hgt_merge/hgt/hma_nasadem_hgt_merge_hgt_adj.vrt
 #refdem=/nobackup/deshean/data/tandemx/hma/TDM1_DEM_90m_hma_DEM.vrt
 #refdem=/nobackup/deshean/data/tandemx/hma/TDM1_DEM_90m_hma_DEM_lt1.5m_err.vrt
-#refdem=/nobackup/deshean/data/tandemx/hma/mos/TDM1_DEM_90m_hma_DEM_masked.vrt
+refdem=/nobackup/deshean/data/tandemx/hma/mos/TDM1_DEM_90m_hma_DEM_masked.vrt
 #refdem=/nobackup/deshean/hma/dem_coreg/mos/hma_20181201_mos/hma_mos_8m/hma_mos_8m_wmean.vrt
 
-refdem=/nobackupp8/deshean/hma/aster/dsm/mos/hma_20181206_mos/hma_mos_13/hma_mos_13_median.vrt
-
-refdem=/nobackup/deshean/hma/dem_coreg/mos/hma_20181209_mos/hma_wvge_mos_13arcsec/hma_wvge_mos_13arcsec_median_masked.vrt
+#Round 2
+#refdem=/nobackupp8/deshean/hma/aster/dsm/mos/hma_20181206_mos/hma_mos_13/hma_mos_13_median.vrt
+#refdem=/nobackup/deshean/hma/dem_coreg/mos/hma_20181209_mos/hma_wvge_mos_13arcsec/hma_wvge_mos_13arcsec_median_masked.vrt
 
 #WVGE
-topdir=/nobackup/deshean/hma/dem_coreg
+#topdir=/nobackup/deshean/hma/dem_coreg
 #ASTER
-#topdir=/nobackup/deshean/hma/aster/dsm
+topdir=/nobackup/deshean/hma/aster/dsm
 
 #CONUS
 #refdem=/nobackup/deshean/data/nasadem/conus/hgt_merge/hgt/conus_nasadem_hgt_merge_hgt_adj.vrt
 #topdir=/nobackup/deshean/conus_combined/dem_coreg_nasadem
 
 cd $topdir
+echo $topdir
+
+ts=$(date +%Y%m%d_%H%M)
+echo $ts
 
 ###
 ### Filtering
@@ -87,15 +92,18 @@ cd $topdir
 ### Co-registration
 ###
 
-#log=log_dem_align
-#if [ ! -d $log ] ; then
-#    mkdir -pv $log
-#fi
+log=log_dem_align
+if [ ! -d $log ] ; then
+    mkdir -pv $log
+fi
+echo $log
 
+echo "Running co-registration.  Preparing file list"
 #ASTER
-#fn_list=$(ls -H -S 2*/AST*DEM_cr.tif | shuf)
+fn_list=$(ls -H -S 2*/AST*DEM_cr.tif | shuf)
+echo $fn_list | wc 
 #ASTER uses limited memory, maybe 0.5 GB each
-#parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
+parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -max_offset 200 -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
 
 #Do tiltcorr with crosstrack
 ##fn_list=$(ll -H -S *DEM_8m_dzfilt*.tif | grep 'alongtrack' | awk '{print $9}')
@@ -103,8 +111,8 @@ cd $topdir
 #WVGE
 #Original files
 #fn_list=$(ls -H -S *track/*DEM_8m_dzfilt*.tif | shuf)
-#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res common_scale_factor $refdem {} > $log/{/.}.log 2>&1; fi" ::: $fn_list
-#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}.log 2>&1; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res common_scale_factor $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
 
 #Apply filter mask to align.tif, can use as reference
 #dem_align.py does this by default now
@@ -114,19 +122,18 @@ cd $topdir
 #Now run make_mos using align.tif or align_filt.tif
 
 #Round 2
-log=log_dem_align_round2
-if [ ! -d $log ] ; then
-    mkdir -pv $log
-fi
+#log=log_dem_align_round2
+#if [ ! -d $log ] ; then
+#    mkdir -pv $log
+#fi
 
-#fn_list=$(ls -H -S alongtrack/2*align/*DEM_8m_dzfilt*align.tif | shuf)
-fn_list=$(ls -H -S -U *track/2*align/*DEM_8m_dzfilt*align.tif | shuf)
-parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1; fi" ::: $fn_list
-##parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}.log 2>&1; fi" ::: $fn_list
+#fn_list=$(ls -H -S -U *track/2*align/*DEM_8m_dzfilt*align.tif | shuf)
+#parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+##parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
 
 #fn_list=$(ls -H -S 2*/AST*DEM_cr_dem_align/*align.tif | shuf)
 #ASTER uses limited memory, maybe 0.5 GB each
-#parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}.log 2>&1 ; fi" ::: $fn_list
+#parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
 
 #For ASTER, now run abs_dz filter after co-registration
 #fn_list=$(ls -S 2*/*align/*align.tif)
