@@ -23,7 +23,8 @@ nlcd_fn='nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_ed
 
 if [ ! -e $nlcd_zip_fn ] ; then
     echo "Downloading $nlcd_zip_fn"
-    url='https://landfire.cr.usgs.gov/MRLC/NLCD/nlcd_2011_landcover_2011_edition_2014_10_10.zip'
+    #url='https://landfire.cr.usgs.gov/MRLC/NLCD/nlcd_2011_landcover_2011_edition_2014_10_10.zip'
+    url='https://prd-tnm.s3.amazonaws.com/StagedProducts/NLCD2011/Land_Cover/CONUS/nlcd_2011_landcover_2011_edition_2014_10_10.zip'
     wget -O $nlcd_zip_fn $url 
 fi
 
