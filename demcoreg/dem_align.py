@@ -181,9 +181,9 @@ def getparser():
     parser.add_argument('-mask_list', nargs='+', type=str, default=['glaciers',], choices=dem_mask.mask_choices, \
             help='Define masks to use to limit reference surfaces for co-registration')
     parser.add_argument('-tiltcorr', action='store_true', \
-            help='After preliminary translation, fit 2D polynomial to residual elevation offsets and remove')
+            help='After preliminary translation, fit polynomial to residual elevation offsets and remove')
     parser.add_argument('-polyorder', type=int, default=1, \
-            help='Specify order of 2D polynomial fit') 
+            help='Specify order of polynomial fit') 
     parser.add_argument('-tol', type=float, default=0.02, \
             help='When iterative translation magnitude is below this tolerance (meters), break and write out corrected DEM')
     parser.add_argument('-max_offset', type=float, default=100, \
