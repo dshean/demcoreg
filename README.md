@@ -1,3 +1,8 @@
+
+
+[![DOI](https://zenodo.org/badge/72886193.svg)](https://zenodo.org/badge/latestdoi/72886193)
+
+
 # demcoreg
 Python and shell scripts for co-registration of rasters, specifically digital elevation models (DEMs).
 
