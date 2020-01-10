@@ -45,7 +45,7 @@ if [ ! -e $nlcd_fn ] ; then
     echo gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
     gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
     echo "Removing NLCD2016_spatial_metadata/ and contents"
-    rm -rvf NLCD2016_spatial_metadata/*
+    rm -rfv NLCD2016_spatial_metadata/*
     mv -v $DATADIR/temp.tif $nlcd_fn
 else 
     echo "Found existing ${nlcd_fn}!"
