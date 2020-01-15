@@ -1,15 +1,8 @@
 #! /bin/bash
 
-#David Shean
-#dshean@gmail.com
-
 #This script will download national land cover data
 #Needed for various masking applications
 #Should be better than global bareground data for identifying exposed rock surfaces
-
-#! /bin/bash
-
-# Script to identify and download NED tiles that intersect with input imagery
 
 # Usage:
 # ./get_nlcd.sh year
@@ -19,11 +12,10 @@ set -e
 # Input year
 yr=$1
 
-# Default is 2011
-if [ -z "$yr" ]
-then
-    echo 'Using default value'
-    yr=2011
+# Default is 2016
+if [ -z "$yr" ] ; then
+    echo "Using default NLCD year 2016"
+    yr=2016
 fi
 
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
@@ -39,10 +31,10 @@ fi
 cd $DATADIR
 
 #CONUS Land Cover (NLCD) grids, 30 m from https://www.mrlc.gov/data
-url='https://s3-us-west-2.amazonaws.com/mrlc/NLCD_'$yr'_Land_Cover_L48_20190424.zip'
-nlcd_zip_fn='NLCD_'$yr'_Land_Cover_L48_20190424.zip'
-nlcd_fn='NLCD_'$yr'_Land_Cover_L48_20190424.tif'
-nlcd_dir='NLCD'$yr'_spatial_metadata/*'
+url="https://s3-us-west-2.amazonaws.com/mrlc/NLCD_${yr}_Land_Cover_L48_20190424.zip"
+nlcd_zip_fn="NLCD_${yr}_Land_Cover_L48_20190424.zip"
+nlcd_fn="NLCD_${yr}_Land_Cover_L48_20190424.tif"
+nlcd_dir=${nlcd_zip_fn%.*}
 
 if [ ! -e $nlcd_zip_fn ] ; then
     echo "Downloading $nlcd_zip_fn"
@@ -51,7 +43,7 @@ fi
 
 if [ ! -e $nlcd_fn ] ; then
     echo "Unzipping $nlcd_zip_fn"
-    unzip $nlcd_zip_fn
+    unzip -d $nlcd_dir $nlcd_zip_fn
     #NOTE: Default OS X unzip fails to extract: skips *.ige due to error (need PK compat. v4.5 (can do v2.1))
     #Can use 7za: brew install p7zip
     #7za x $nlcd_zip_fn
@@ -60,8 +52,8 @@ if [ ! -e $nlcd_fn ] ; then
     #Can save a lot of disk space compressing the original ArcGrid img and deleting overviews
     #Input is ~17 GB, output is 1.1 GB
     echo "Creating compressed GTiff copy"
-    echo gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
-    gdal_translate $gdal_opt ${nlcd_fn%.*}.img $DATADIR/temp.tif
+    echo gdal_translate $gdal_opt $nlcd_dir/${nlcd_fn%.*}.img $DATADIR/temp.tif
+    gdal_translate $gdal_opt $nlcd_dir/${nlcd_fn%.*}.img $DATADIR/temp.tif
     echo "Removing metadata directory and contents"
     rm -rfv $nlcd_dir
     mv -v $DATADIR/temp.tif $nlcd_fn
