@@ -31,19 +31,21 @@ from pygeotools.lib import iolib, warplib, geolib, timelib
 
 datadir = iolib.get_datadir()
 
-def get_nlcd_fn():
+def get_nlcd_fn(yr=2016):
     """Calls external shell script `get_nlcd.sh` to fetch:
 
-    2011 Land Use Land Cover (nlcd) grids, 30 m
+    Land Use Land Cover (nlcd) grids, 30 m
+    2011, 2013 or 2016 (default)
     
     http://www.mrlc.gov/nlcd11_leg.php
     """
     #This is original filename, which requires ~17 GB
     #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
-    #get_nlcd.sh now creates a compressed GTiff, which is 1.1 GB
-    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
+    #get_nlcd.sh creates a compressed GTiff, which is 1.1 GB
+    #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
+    nlcd_fn = os.path.join(datadir, 'NLCD_{0}_Land_Cover_L48_20190424/NLCD_{0}_Land_Cover_L48_20190424.tif'.format(str(yr)))
     if not os.path.exists(nlcd_fn):
-        cmd = ['get_nlcd.sh',]
+        cmd = ['get_nlcd.sh', str(yr)]
         #subprocess.call(cmd)
         sys.exit("Missing nlcd data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
     return nlcd_fn
