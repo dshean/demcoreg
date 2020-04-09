@@ -50,7 +50,7 @@ def apply_z_shift(ds, dz, createcopy=True):
         ds_shift = ds
     b = ds_shift.GetRasterBand(1)
     a = iolib.b_getma(b)
-    a += dz
+    a = a + dz
     b.WriteArray(a.filled())
     return ds_shift
 
