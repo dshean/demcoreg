@@ -1,7 +1,7 @@
 # Python/Bash Beginners guide to demcoreg
 **Operating System**
 - The intructions below are for a *.nix machine (Linux/Mac). There are some reported glitches for Windows.
-- If a user wants to install on Windows, please install Ubuntu subsystem for Windows. We will post another set of instructions to help with that.
+- If a user wants to implement on Windows, please install [Ubuntu subsystem for Windows](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and then follow these instructions below. You would want to select miniconda for linux (not for windows :)) in the first installation step when doing so. 
 
 **Dependent Software**
 - This pacakage is dependent on several python packages for full functionality, all of which need to be installed to execute it sucessfully. For new users, this can be daunting, the instructions here are with such users in mind. Powerusers are free to install as per their liking.
