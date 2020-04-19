@@ -1,4 +1,4 @@
-# Python/Bash Beginners guide to demcoreg
+# Python/Bash Beginner's guide to demcoreg
 
 The demcoreg README.md provides a basic overview of installation and usage for users with basic Python, bash, and git/github proficiency.  This document is intended to provide additional support for new users of these tools, who often need to co-register two DEMs for a relatively limited application, without all of the advanced options.  
 
