@@ -9,7 +9,7 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
 ## Features
 - Multiple co-registration algorithms:
     - Automated, iterative implementation of the algorithm outlined by [Nuth and Kaab (2011)](https://www.the-cryosphere.net/5/271/2011/tc-5-271-2011.html)
-    - Iterative Closest Point (ICP) wrappers around the [Ames Stereo Pipeline](https://ti.arc.nasa.gov/tech/asr/intelligent-robotics/ngt/stereo/) `pc_align` utility (https://stereopipeline.readthedocs.io/en/latest/tools/pc_align.html)
+    - Wrappers around the [Ames Stereo Pipeline](https://ti.arc.nasa.gov/tech/asr/intelligent-robotics/ngt/stereo/) Iterative Closest Point (ICP) `pc_align` utility (https://stereopipeline.readthedocs.io/en/latest/tools/pc_align.html)
     - Normalized cross-correlation (NCC) with sub-pixel refinment
     - Sum of absolute differences (SAD)
 - Command-line utilities for raster differencing with necessary resampling (`compute_diff.py`), raster stats (`robust_stats.py`), and raster sampling at point locations (`sample_raster_at_pts.py`)
