@@ -21,14 +21,19 @@ The demcoreg README.md provides a basic overview of installation and usage for u
   - `git clone https://github.com/dshean/demcoreg.git`
   - `git clone https://github.com/dshean/imview.git`
 6. Install these packages, so you can use them with your conda Python:
-  - `pip insatall -e pygeotools/`
+  - `pip install -e pygeotools/`
   - `pip install -e demcoreg/`
   - `pip install -e imview/`
-7. In addition to Python modules, these packages also contain some command-line scripts.  While you can always run these scripts from the terminal using a full path (e.g., `~/src/pygeotools/pygeotools/warptool.py`), it's convenient to run them using only `warptool.py`. To accomplish this, you can add the directory to the `~/.bashrc` file in your home directory.
+7. In addition to Python modules, these packages also contain some command-line scripts.  While you can always run these scripts from the terminal using a full path (e.g., `~/src/pygeotools/pygeotools/warptool.py`), it's convenient to run them using only `warptool.py`. To accomplish this, you can add the directory to the `~/.bashrc` or (`~/.bash_profile`) file in your home directory.
   - To get the full path name `realpath demcoreg/demcoreg`
   - Open `~/.bashrc` in a text editor of your choice, and add the following line to the end of the file: `export PATH="~/src/pygeotools/pygeotools:~/src/demcoreg/demcoreg:~/src/imview/imview:$PATH"`
+    - Navigate to your home directory using `cd`
+    - Type `ls -al` in the command line to view a list of files (including hidden files) in the home directory 
+    - Determine if you have `~/.bashrc` or `~/.bash_profile` 
+    - `open ~/.bashrc` or `open ~/.bash_profile` will open the file with TextEdit and allow you to add the path line
   - Run `source ~/.bashrc` in your current terminal session (won't need to do this in the future)
-8. In your terminal, type `dem_align.py -h`.  You should see the usage statement starting with:
+8. You may need to reactivate the demcoreg envionment after running the bash file. As previously, do so with: `conda activate demcoreg_env`
+9. In your terminal, type `dem_align.py -h`.  You should see the usage statement starting with:
 ```
 usage: dem_align.py [-h] [-mode {ncc,sad,nuth,none}]
                     [-mask_list {toa,snodas,modscag,bareground,glaciers,nlcd,none} [{toa,snodas,modscag,bareground,glaciers,nlcd,none} ...]]
@@ -45,6 +50,8 @@ usage: dem_align.py [-h] [-mode {ncc,sad,nuth,none}]
 - `dem_align.py` is the workhorse here which can be used to align two rasters. This is probably the most desirable operation for new users who install this package for aligning/co-registering two DEMs. 
 - To align two DEMs named dem1.tif and dem2.tif, run the following command: `dem_align.py -mode nuth dem1.tif dem2.tif`  
 *Note: When run for the first time, demcoreg will download glacier polygons from the rgi website which might take some time.*
+  - If you have no already downloaded the rgi glacier polygons, you will be prompt to run `get_rgi.sh`
+  - In order to run `get_rgi.sh`, you will need to install `wget` if it is not already installed on your computer. You can do so using conda forge or brew: `conda install wget` or `brew install wget`
 - This will co-register dem2.tif to dem1.tif, and will store the results in a subdirectory (see the log output). The folders contain the aligned dem2.tif (filename ending with `*_align.tif`), final elevation difference map (filename ending with `*_align_diff.tif`) and the elevation difference map over static surfaces used during alignment (`*_align_diff_filt.tif`). 
 - You can open these GeoTiff files in GIS software like QGIS/ArcGIS to analyse the above mentioned files. The output folder also contains a .png file (ending with `*_align.png`). This contains figures of input DEMs, surfaces used for co-registration, elevation difference maps and histograms/stats before and after co-registration (see sample png figure in demcoreg README). 
 
