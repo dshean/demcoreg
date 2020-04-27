@@ -1,4 +1,5 @@
 #! /bin/bash
+set -e
 
 #David Shean
 #dshean@gmail.com
