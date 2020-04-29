@@ -24,17 +24,18 @@ All DEMs have some horizontal and vertical geolocation error.  It is important t
         - Thresholded Top-of-atmosphere reflectance values from corresponding orthoimage (requires pregeneration)
 
 ### Some useful command-line utilities (run with `-h` option for complete usage)
-- `dem_align.py` - robust raster DEM co-registration (e.g., Nuth and Kaab [2011]) for surfaces with variable slope and aspect
-- `dem_mask.py` - generate mask of snow-free rock surfaces using reflectance, LULC, SNODAS, MODSCAG
+- `dem_align.py` - robust raster DEM co-registration (e.g., Nuth and Kaab [2011]) for surfaces with variable slope and aspect (e.g., mountains)
+- `dem_mask.py` - pre-generate mask to identify "stable" surfaces to use during co-registration
 - `pc_align_wrapper.sh` - wrapper around NASA Ames Stereo Pipeline pc_align utility for iterative closest point co-registration 
-- `apply_dem_translation.py` - update geotransform and remove vertical offset
+- `apply_dem_translation.py` - update raster geotransform and remove vertical offset
 - `compute_diff.py` - simple DEM difference calculation with intuitive resampling options
-- `robust_stats.py` - print out robust statistics for sampled DEM differences before/after co-registration
+- `robust_stats.py` - print out robust raster statistics (e.g,. for DEM difference map before/after co-registration)
 
 ## Sample output 
 ### dem_align.py 
 Sample command: `dem_align.py ref_dem.tif src_dem.tif`
 ![Sample dem_align](docs/20081123_0446_1735796131_1735796132_40m-DEM_hma_nasadem_hgt_lt5m_err_nuth_x+26.19_y+182.36_z-65.52_align_sm.jpg)
+![Nuth and Kaab plot](docs/nuth_sample.jpg)
 
 ### dem_mask.py
 Sample command: `dem_mask.py --toa --bareground --glaciers src_dem.tif`
@@ -60,9 +61,9 @@ If unfamiliar with this process, or if you are new to Python, bash, and/or git/g
 ### Building from Latest Source (recommended)
 1. Assuming you have working Python3 install with GDAL and NumPy, install [`pygeotools`](https://github.com/dshean/pygeotools)
 1. Clone the `demcoreg` repository: `git clone https://github.com/dshean/demcoreg.git`
-2. Perform developer install with pip: `pip install -e demcoreg`
-    - *The -e flag ("editable mode", setuptools "develop mode") will allow you to modify source code and immediately see changes.*
-3. Optionally, append the demcoreg subdirectory containing scripts to your PATH: `export PATH=${PATH}:$PWD/demcoreg/demcoreg` (replacing `$PWD` with the absolute path to the cloned demcoreg repository)
+1. Perform developer install with pip: `pip install -e demcoreg`
+    - *The -e flag ("editable mode", setuptools "develop mode") will allow you to modify source code and immediately see changes. Useful if you need to make minor tweaks or bugfixes (please submit a Pull Request!)*
+1. Optionally, append the demcoreg subdirectory containing scripts to your PATH: `export PATH=${PATH}:$PWD/demcoreg/demcoreg` (replacing `$PWD` with the absolute path to the cloned demcoreg repository)
     - *To make this permanent, add that line to your shell config file (e.g., ~/.bashrc).* 
 
 ### Simple install with PyPI
