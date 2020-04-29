@@ -444,7 +444,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
             newmask = np.logical_and(icemask, newmask)
 
         #Need to process NLCD separately, with nearest neighbor inteprolatin
-        if 'nlcd' in mask_list and args.nlcd_filter is not 'none':
+        if 'nlcd' in mask_list and args.nlcd_filter != 'none':
             rs = 'near'
             nlcd_ds = gdal.Open(get_nlcd_fn())
             nlcd_ds_warp = warplib.memwarp_multi([nlcd_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r=rs)[0]
