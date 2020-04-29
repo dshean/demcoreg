@@ -178,7 +178,7 @@ def getparser():
     parser.add_argument('src_fn', type=str, help='Source DEM filename to be shifted')
     parser.add_argument('-mode', type=str, default='nuth', choices=['ncc', 'sad', 'nuth', 'none'], \
             help='Type of co-registration to use')
-    parser.add_argument('-mask_list', nargs='+', type=str, default=['glaciers',], choices=dem_mask.mask_choices, \
+    parser.add_argument('-mask_list', nargs='+', type=str, default=[], choices=dem_mask.mask_choices, \
             help='Define masks to use to limit reference surfaces for co-registration')
     parser.add_argument('-tiltcorr', action='store_true', \
             help='After preliminary translation, fit polynomial to residual elevation offsets and remove')

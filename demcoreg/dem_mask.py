@@ -413,7 +413,7 @@ def check_mask_list(mask_list):
 
 def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=None):
     mask_list = check_mask_list(mask_list)
-    if 'none' in mask_list:
+    if not mask_list or 'none' in mask_list:
         newmask = False
     else:
         #Basename for output files
