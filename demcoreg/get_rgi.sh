@@ -78,7 +78,7 @@ mv 00_rgi*Regions* ../
 #Merge regions for global shp
 #if [ ! -e rgi60_merge.shp ] ; then
 echo "Merging region shp for global shp"
-ogr_merge.sh rgi60_merge.shp *_rgi60_*shp
+ogrmerge.py -single -o rgi60_merge.shp *_rgi60_*shp
 #fi
 
 function clipnproj() {
