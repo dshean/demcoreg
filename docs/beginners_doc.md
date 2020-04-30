@@ -55,7 +55,6 @@ usage: dem_align.py [-h] [-mode {ncc,sad,nuth,none}]
 *Note: When run for the first time, demcoreg will download glacier polygons from the rgi website which might take some time.*
   - If you have no already downloaded the rgi glacier polygons, you will be prompt to run `get_rgi.sh`
   - In order to run `get_rgi.sh`, you will need to install `wget` if it is not already installed on your computer. You can do so using conda forge or brew: `conda install wget` or `brew install wget`
-  - Note that if you have not added the pygeotools/pygeotools directory to your path, the `get_rgi.sh` script will fail.
 - This will co-register dem2.tif to dem1.tif, and will store the results in a subdirectory (see the log output). The folders contain the aligned dem2.tif (filename ending with `*_align.tif`), final elevation difference map (filename ending with `*_align_diff.tif`) and the elevation difference map over static surfaces used during alignment (`*_align_diff_filt.tif`). 
 - You can open these GeoTiff files in GIS software like QGIS/ArcGIS to analyse the above mentioned files. The output folder also contains a .png file (ending with `*_align.png`). This contains figures of input DEMs, surfaces used for co-registration, elevation difference maps and histograms/stats before and after co-registration (see sample png figure in demcoreg README). 
 
