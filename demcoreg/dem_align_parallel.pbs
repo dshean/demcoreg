@@ -5,9 +5,9 @@
 ##PBS -lselect=64:model=ivy
 ##PBS -lselect=24:model=has
 #PBS -lselect=48:model=bro
-#PBS -lwalltime=4:00:00
-##PBS -q devel 
-#PBS -q long 
+#PBS -lwalltime=2:00:00
+#PBS -q devel 
+##PBS -q long 
 #Email
 #PBS -m abe
 ##Join stdout and stderr
@@ -42,7 +42,11 @@ export GDAL_MAX_DATASET_POOL_SIZE=32768
 #refdem=/nobackup/deshean/data/nasadem/hma/hgt_merge/hgt/hma_nasadem_hgt_merge_hgt_adj.vrt
 #refdem=/nobackup/deshean/data/tandemx/hma/TDM1_DEM_90m_hma_DEM.vrt
 #refdem=/nobackup/deshean/data/tandemx/hma/TDM1_DEM_90m_hma_DEM_lt1.5m_err.vrt
-refdem=/nobackup/deshean/data/tandemx/hma/mos/TDM1_DEM_90m_hma_DEM_masked.vrt
+#This was used for initial submission, potential issues with vrt tile offsets
+#refdem=/nobackup/deshean/data/tandemx/hma/mos/TDM1_DEM_90m_hma_DEM_masked.vrt
+#This is updated version, reprojecting tiles up front
+#refdem=/nobackup/deshean/data/tandemx/hma/mos_warp_erode/TDM1_DEM_90m_hma_DEM_masked_aea.vrt
+refdem=/nobackup/deshean/data/tandemx/hma/mos_warp_erode/TDM1_DEM_90m_hma_DEM_masked_aea.tif
 #refdem=/nobackup/deshean/hma/dem_coreg/mos/hma_20181201_mos/hma_mos_8m/hma_mos_8m_wmean.vrt
 
 #Round 2
@@ -64,6 +68,10 @@ echo $topdir
 ts=$(date +%Y%m%d_%H%M)
 echo $ts
 
+#Note 9/9/19
+#If nobackup is slow, the ls for files can take forever, all nodes sitting idle
+#Likely better to pregenerate filename lists
+
 ###
 ### Filtering
 ###
@@ -75,24 +83,32 @@ echo $ts
 #done=$(ls -Sr *00/dem*/*dzfilt*tif)
 #fn_list=$(ls -Sr *00/dem*/*DEM_*m.tif)
 #notdone=""; for i in $fn_list ; do if ! echo $done | grep -q $(dirname $i) ; then notdone+=" $i" ; fi ; done
-#parallel -j 10 --sshloginfile $PBS_NODEFILE "cd $topdir; ~/src/dgtools/dgtools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $notdone
+#parallel -j 10 --sshloginfile "$PBS_NODEFILE" "cd $topdir; ~/src/dgtools/dgtools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $notdone
 
 #fn_list=$(ls -Sr *00/dem*/*DEM_{32,8,2}m.tif)
 #fn_list=$(ls -S *00/dem*/*DEM_2m.tif)
-##parallel -j 10 --delay 0.1 --verbose --sshloginfile $PBS_NODEFILE "cd $topdir; if [ ! -e {.}_dzfilt_-${max_dz}_${max_dz}.tif ] ; then ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz} ; fi " ::: $fn_list
-#parallel -j 6 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
+##parallel -j 10 --delay 0.1 --verbose --sshloginfile "$PBS_NODEFILE" "cd $topdir; if [ ! -e {.}_dzfilt_-${max_dz}_${max_dz}.tif ] ; then ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz} ; fi " ::: $fn_list
+#parallel -j 6 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
 
 #fn_list=$(ls -S *00/dem*/*DEM_8m.tif)
-#parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
+#parallel -j 20 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
 
 #fn_list=$(ls -S *00/dem*/*DEM_32m.tif)
-#parallel --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
+#parallel --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; ~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
 
 ###
 ### Co-registration
 ###
 
-log=log_dem_align
+#Clean up
+#for i in 2*
+#do
+#echo $i
+#mkdir $i/TDM_align_201902_badvrt
+#mv $i/A*dem_align $i/TDM_align_201902_badvrt/
+#done
+
+log=log_dem_align_201909_TDMwarp
 if [ ! -d $log ] ; then
     mkdir -pv $log
 fi
@@ -103,7 +119,7 @@ echo "Running co-registration.  Preparing file list"
 fn_list=$(ls -H -S 2*/AST*DEM_cr.tif | shuf)
 echo $fn_list | wc 
 #ASTER uses limited memory, maybe 0.5 GB each
-parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -max_offset 200 -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
+parallel -j 56 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -max_offset 200 -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
 
 #Do tiltcorr with crosstrack
 ##fn_list=$(ll -H -S *DEM_8m_dzfilt*.tif | grep 'alongtrack' | awk '{print $9}')
@@ -111,8 +127,8 @@ parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e 
 #WVGE
 #Original files
 #fn_list=$(ls -H -S *track/*DEM_8m_dzfilt*.tif | shuf)
-#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res common_scale_factor $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
-#parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res common_scale_factor $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+#parallel -j 28 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
 
 #Apply filter mask to align.tif, can use as reference
 #dem_align.py does this by default now
@@ -128,13 +144,13 @@ parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e 
 #fi
 
 #fn_list=$(ls -H -S -U *track/2*align/*DEM_8m_dzfilt*align.tif | shuf)
-#parallel -j 20 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
-##parallel -j 28 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+#parallel -j 20 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
+##parallel -j 28 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align_tiltcorr/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py $refdem -res common_scale_factor {} -tiltcorr > tee $log/{/.}_${ts}.log 2>&1; fi" ::: $fn_list
 
 #fn_list=$(ls -H -S 2*/AST*DEM_cr_dem_align/*align.tif | shuf)
 #ASTER uses limited memory, maybe 0.5 GB each
-#parallel -j 56 --sshloginfile $PBS_NODEFILE "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
+#parallel -j 56 --sshloginfile "$PBS_NODEFILE" "unset -f cd; cd $topdir; if [ ! -e {.}*align/*align.tif ] ; then ~/src/demcoreg/demcoreg/dem_align.py -res min $refdem {} > $log/{/.}_${ts}.log 2>&1 ; fi" ::: $fn_list
 
 #For ASTER, now run abs_dz filter after co-registration
 #fn_list=$(ls -S 2*/*align/*align.tif)
-#parallel -j 28 --workdir $topdir --sshloginfile $PBS_NODEFILE "~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
+#parallel -j 28 --workdir $topdir --sshloginfile "$PBS_NODEFILE" "~/src/pygeotools/pygeotools/filter.py {} -filt dz -param $refdem -${max_dz} ${max_dz}" ::: $fn_list
