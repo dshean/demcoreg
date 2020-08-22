@@ -31,19 +31,22 @@ from pygeotools.lib import iolib, warplib, geolib, timelib
 
 datadir = iolib.get_datadir()
 
-def get_nlcd_fn():
+def get_nlcd_fn(yr=2016):
     """Calls external shell script `get_nlcd.sh` to fetch:
 
-    2011 Land Use Land Cover (nlcd) grids, 30 m
+    Land Use Land Cover (nlcd) grids, 30 m
+    2011, 2013 or 2016 (default)
     
     http://www.mrlc.gov/nlcd11_leg.php
     """
     #This is original filename, which requires ~17 GB
     #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.img')
-    #get_nlcd.sh now creates a compressed GTiff, which is 1.1 GB
-    nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
+    #get_nlcd.sh creates a compressed GTiff, which is 1.1 GB
+    #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
+    #nlcd_fn = os.path.join(datadir, 'NLCD_{0}_Land_Cover_L48_20190424/NLCD_{0}_Land_Cover_L48_20190424.tif'.format(str(yr)))
+    nlcd_fn = os.path.join(datadir, 'NLCD_{0}_Land_Cover_L48_20190424.tif'.format(str(yr)))
     if not os.path.exists(nlcd_fn):
-        cmd = ['get_nlcd.sh',]
+        cmd = ['get_nlcd.sh', str(yr)]
         #subprocess.call(cmd)
         sys.exit("Missing nlcd data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
     return nlcd_fn
@@ -410,7 +413,7 @@ def check_mask_list(mask_list):
 
 def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=None):
     mask_list = check_mask_list(mask_list)
-    if 'none' in mask_list:
+    if not mask_list or 'none' in mask_list:
         newmask = False
     else:
         #Basename for output files
@@ -441,7 +444,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
             newmask = np.logical_and(icemask, newmask)
 
         #Need to process NLCD separately, with nearest neighbor inteprolatin
-        if 'nlcd' in mask_list and args.nlcd_filter is not 'none':
+        if 'nlcd' in mask_list and args.nlcd_filter != 'none':
             rs = 'near'
             nlcd_ds = gdal.Open(get_nlcd_fn())
             nlcd_ds_warp = warplib.memwarp_multi([nlcd_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r=rs)[0]
@@ -611,6 +614,13 @@ def main():
     #True (1) represents "valid" unmasked pixel, False (0) represents "invalid" pixel to be masked
     #Initialize the mask
     #newmask = ~(np.ma.getmaskarray(dem))
+
+    #Basename for output files
+    if args.outdir is not None:
+        if not os.path.exists(args.outdir):
+            os.makedirs(args.outdir)
+    else:
+        args.outdir = os.path.split(dem_fn)[0]
     
     newmask = get_mask(dem_ds, mask_list, dem_fn=dem_fn, writeout=args.writeout, outdir=args.outdir, args=args)
     
