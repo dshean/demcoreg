@@ -426,7 +426,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
         if dem_fn is not None:
             #Extract DEM timestamp
             dem_dt = timelib.fn_getdatetime(dem_fn)
-            out_fn_base = os.path.join(outdir, os.path.splitext(dem_fn)[0])
+            out_fn_base = os.path.join(outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0])
         
         if args is None:
             #Get default values
