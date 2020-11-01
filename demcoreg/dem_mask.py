@@ -636,7 +636,7 @@ def main():
     print("%0.2f std in masked output tif to be used as ref" % validpx_std)
     #if (validpx_count > min_validpx_count) and (validpx_std > min_validpx_std):
     if (validpx_count > min_validpx_count):
-        out_fn = os.path.join(args.outdir, os.path.splitext(dem_fn)[0]+'_ref.tif')
+        out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+'_ref.tif')
         print("Writing out %s" % out_fn)
         iolib.writeGTiff(newdem, out_fn, src_ds=dem_ds)
     else:
