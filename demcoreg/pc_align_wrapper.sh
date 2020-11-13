@@ -122,6 +122,10 @@ ref_res=140.0
 #Format from demcoreg ICESat-1 csv
 fmt="--csv-format '3:lat 4:lon 5:height_above_datum'"
 
+#ICESat-2 along-track spacing ATL08
+#ref_res=100.0
+#fmt="--csv-format '2:lat 3:lon 4:height_above_datum'"
+
 pc_align_opt=''
 point2dem_opt=''
 
