@@ -537,7 +537,8 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
         if 'toa' in mask_list:
             #Use top of atmosphere scaled reflectance values (0-1)
             toa_ds = gdal.Open(get_toa_fn(dem_fn))
-            toa_mask = get_toa_mask(toa_ds, args.toa_thresh)
+            toa_ds_warp = warplib.memwarp_multi([toa_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds)[0]
+            toa_mask = get_toa_mask(toa_ds_warp, args.toa_thresh)
             if writeout:
                 out_fn = out_fn_base+'_toa_mask.tif'
                 print("Writing out %s" % out_fn)
