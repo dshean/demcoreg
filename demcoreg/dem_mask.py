@@ -366,29 +366,35 @@ def proc_modscag(fn_list, extent=None, t_srs=None):
 
 def get_toa_fn(dem_fn):
     toa_fn = None
-    #Original approach, assumes DEM file is in *00/dem_*/*DEM_32m.tif
-    #dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
-    dem_dir_list = os.path.split(os.path.realpath(dem_fn))[0].split(os.sep)
-    import re
-    #Get index of the top level pair directory containing toa (WV02_20140514_1030010031114100_1030010030896000)
-    r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)]
-    if r_idx:
-        r_idx = r_idx[0]
-        #Reconstruct dir
-        dem_dir = (os.sep).join(dem_dir_list[0:r_idx+1])
-        #Find toa.tif in top-level dir
-        toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        if not toa_fn:
-            ortho_fn = glob.glob(os.path.join(dem_dir, '*ortho*.tif'))
-            if ortho_fn:
-                cmd = ['toa.sh', dem_dir]
-                print(cmd)
-                subprocess.call(cmd)
-                toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
-        if toa_fn:
-            toa_fn = toa_fn[0]
-        else:
-            toa_fn = None
+    dem_dir = os.path.split(os.path.realpath(dem_fn))[0]
+    toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+    if toa_fn:
+        toa_fn = toa_fn[0]
+    else:
+        #TODO clean this up, take argument with toa fn
+        #Original approach, assumes DEM file is in *00/dem_*/*DEM_32m.tif
+        #dem_dir = os.path.split(os.path.split(os.path.abspath(dem_fn))[0])[0]
+        dem_dir_list = os.path.split(os.path.realpath(dem_fn))[0].split(os.sep)
+        import re
+        #Get index of the top level pair directory containing toa (WV02_20140514_1030010031114100_1030010030896000)
+        r_idx = [i for i, item in enumerate(dem_dir_list) if re.search('(_10)*(_10)*00$', item)]
+        if r_idx:
+            r_idx = r_idx[0]
+            #Reconstruct dir
+            dem_dir = (os.sep).join(dem_dir_list[0:r_idx+1])
+            #Find toa.tif in top-level dir
+            toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+            if not toa_fn:
+                ortho_fn = glob.glob(os.path.join(dem_dir, '*ortho*.tif'))
+                if ortho_fn:
+                    cmd = ['toa.sh', dem_dir]
+                    print(cmd)
+                    subprocess.call(cmd)
+                    toa_fn = glob.glob(os.path.join(dem_dir, '*toa.tif'))
+            if toa_fn:
+                toa_fn = toa_fn[0]
+            else:
+                toa_fn = None
     if toa_fn is None:
         sys.exit("Unable to locate TOA dataset")
     return toa_fn
@@ -421,7 +427,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
         else:
-            outdir = os.path.split(dem_fn)[0]
+            outdir = os.path.split(os.path.realpath(dem_fn))[0]
 
         if dem_fn is not None:
             #Extract DEM timestamp
@@ -620,7 +626,7 @@ def main():
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
     else:
-        args.outdir = os.path.split(dem_fn)[0]
+        args.outdir = os.path.split(os.path.realpath(dem_fn))[0]
     
     newmask = get_mask(dem_ds, mask_list, dem_fn=dem_fn, writeout=args.writeout, outdir=args.outdir, args=args)
     
