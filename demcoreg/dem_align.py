@@ -368,15 +368,23 @@ def main(argv=None):
                 print("Calculating 'tiltcorr' 2D polynomial fit to residuals with order %i" % polyorder)
                 print("************\n")
                 gt = src_dem_clip_ds_align.GetGeoTransform()
+               
+                import DemUtils as du
+                xgrid, ygrid = geolib.get_xy_ma(diff_align_filt)
+                ramp_fn = du.coreg.deramping(diff_align_filt.filled(np.nan), xgrid, ygrid, polyorder)
+                valgrid = ramp_fn(xgrid, ygrid)
+                vals_stats = malib.get_stats_dict(valgrid)
+
+                xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align, mapcoord=False)
+                valgrid = ramp_fn(xgrid, ygrid)
+                #resid = diff_align_filt - vals
 
                 #Need to apply the mask here, so we're only fitting over static surfaces
                 #Note that the origmask=False will compute vals for all x and y indices, which is what we want
-                vals, resid, coeff = geolib.ma_fitpoly(diff_align_filt, order=polyorder, gt=gt, perc=(0,100), origmask=False)
+                #vals, resid, coeff = geolib.ma_fitpoly(diff_align_filt, order=polyorder, gt=gt, perc=(0,100), origmask=False)
                 #vals, resid, coeff = geolib.ma_fitplane(diff_align_filt, gt, perc=(12.5, 87.5), origmask=False)
 
                 #Should write out coeff or grid with correction 
-
-                vals_stats = malib.get_stats_dict(vals)
 
                 #Want to have max_tilt check here
                 #max_tilt = 4.0 #m
@@ -385,8 +393,8 @@ def main(argv=None):
 
                 #Note: dimensions of ds and vals will be different as vals are computed for clipped intersection
                 #Need to recompute planar offset for full src_dem_ds_align extent and apply
-                xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align)
-                valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
+                #xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align)
+                #valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
                 #For results of ma_fitplane
                 #valgrid = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
                 src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, -valgrid, createcopy=False)
@@ -394,7 +402,7 @@ def main(argv=None):
                 if True:
                     print("Creating plot of polynomial fit to residuals")
                     fig, axa = plt.subplots(1,2, figsize=(8, 4))
-                    dz_clim = malib.calcperc_sym(vals, (2, 98))
+                    dz_clim = malib.calcperc_sym(valgrid, (2, 98))
                     ax = pltlib.iv(diff_align_filt, ax=axa[0], cmap='RdBu', clim=dz_clim, \
                             label='Residual dz (m)', scalebar=False)
                     ax = pltlib.iv(valgrid, ax=axa[1], cmap='RdBu', clim=dz_clim, \
@@ -404,9 +412,6 @@ def main(argv=None):
                     tiltcorr_fig_fn = outprefix + '%s_polyfit.png' % xyz_shift_str_cum_fn
                     print("Writing out figure: %s\n" % tiltcorr_fig_fn)
                     fig.savefig(tiltcorr_fig_fn, dpi=300)
-
-                print("Applying tilt correction to difference map")
-                diff_align -= vals
 
                 #Should iterate until tilts are below some threshold
                 #For now, only do one tiltcorr
@@ -445,11 +450,13 @@ def main(argv=None):
     src_dem_ds_align = coreglib.apply_xy_shift(src_dem_ds_align, dx_total, dy_total, createcopy=False)
     src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, dz_total, createcopy=False)
     if tiltcorr:
-        xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align)
-        valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
+        xgrid, ygrid = geolib.get_xy_grids(src_dem_ds_align, mapcoord=False)
+        #valgrid = geolib.polyval2d(xgrid, ygrid, coeff) 
         #For results of ma_fitplane
         #valgrid = coeff[0]*xgrid + coeff[1]*ygrid + coeff[2]
+        valgrid = ramp_fn(xgrid, ygrid)
         src_dem_ds_align = coreglib.apply_z_shift(src_dem_ds_align, -valgrid, createcopy=False)
+
     #Might be cleaner way to write out MEM ds directly to disk
     src_dem_full_align = iolib.ds_getma(src_dem_ds_align)
     iolib.writeGTiff(src_dem_full_align, align_fn, src_dem_ds_align)
@@ -521,7 +528,7 @@ def main(argv=None):
         #This tiltcorr flag gets set to false, need better flag
         if tiltcorr:
             align_stats['tiltcorr'] = {}
-            align_stats['tiltcorr']['coeff'] = coeff.tolist()
+            #align_stats['tiltcorr']['coeff'] = coeff.tolist()
             align_stats['tiltcorr']['val_stats'] = vals_stats
         align_stats['before'] = diff_orig_stats
         align_stats['before_filt'] = diff_orig_filt_stats
