@@ -44,7 +44,7 @@ def get_nlcd_fn(yr=2016):
     #get_nlcd.sh creates a compressed GTiff, which is 1.1 GB
     #nlcd_fn = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10/nlcd_2011_landcover_2011_edition_2014_10_10.tif')
     #nlcd_fn = os.path.join(datadir, 'NLCD_{0}_Land_Cover_L48_20190424/NLCD_{0}_Land_Cover_L48_20190424.tif'.format(str(yr)))
-    nlcd_fn = os.path.join(datadir, 'NLCD_{0}_Land_Cover_L48_20190424.tif'.format(str(yr)))
+    nlcd_fn = os.path.join(datadir, 'nlcd_{0}_land_cover_l48_20210604.tif'.format(str(yr)))
     if not os.path.exists(nlcd_fn):
         cmd = ['get_nlcd.sh', str(yr)]
         #subprocess.call(cmd)

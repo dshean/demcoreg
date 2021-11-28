@@ -31,9 +31,9 @@ fi
 cd $DATADIR
 
 #CONUS Land Cover (NLCD) grids, 30 m from https://www.mrlc.gov/data
-url="https://s3-us-west-2.amazonaws.com/mrlc/NLCD_${yr}_Land_Cover_L48_20190424.zip"
-nlcd_zip_fn="NLCD_${yr}_Land_Cover_L48_20190424.zip"
-nlcd_fn="NLCD_${yr}_Land_Cover_L48_20190424.tif"
+url="https://s3-us-west-2.amazonaws.com/mrlc/nlcd_${yr}_land_cover_l48_20210604.zip"
+nlcd_zip_fn="nlcd_${yr}_land_cover_l48_20210604.zip"
+nlcd_fn="nlcd_${yr}_land_cover_l48_20210604.tif"
 nlcd_dir=${nlcd_zip_fn%.*}
 
 if [ ! -e $nlcd_zip_fn ] ; then
