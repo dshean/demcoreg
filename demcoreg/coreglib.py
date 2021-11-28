@@ -9,7 +9,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pygeotools.lib import malib, iolib
+from pygeotools.lib import malib, iolib, warplib
+from imview import pltlib
 
 def apply_xy_shift(ds, dx, dy, createcopy=True):
     """
@@ -484,3 +485,241 @@ def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
             
     return subp_peak_position[0], subp_peak_position[1]
 
+## functions for along-track cross-track correction and plotting
+def successive_med(a, first_axis=1,first_axis_only=False,sav_filter=False,sg_window=101,sg_poly=2,min_axes_count=350):
+    """
+    Subtract median values from each axis of the input difference map array
+    Parameters
+    -----------
+    a: np.ma.array
+        input array
+    first_axis: int
+        1 or 2 (which axis) to operate on first
+    first_axis_only: bool
+        wether to apply the correction over the first axis only (True) or both the axes (False)
+    sav_filter: bool
+        whether to smooth the axis-medians or not using savgol filter
+    sg_window: int
+        odd window sizes to be used in savgol filtering
+    sg_poly: int
+        polynomial order to be used in savgol filtering
+    min_axes_count: int
+        minimum number of filtered pixels in any given axes for that axes to contribute to stats computation
+    Returns
+    -----------
+    b: np.ma.array
+        Corrected array 
+    med_first: np.array
+        first_axis  corrections
+    med_second: np.array
+        second_axis  corrections
+    first_correction_surface: np.array
+        correction surface along input first axis
+    second_correction_surface:np.array
+        correction surface along input second axis
+    med_first_smooth: np.array
+        smoothend first_axis corrections (optional, if sav_filter=True)
+    med_second_smooth: np.array
+        smoothened second_axis  corrections (optional, if sav_filter=True)
+    
+    """
+    import scipy.signal
+    ### Parts of the function was first written by David for the Arctic DEM snow drift correction 
+    second_axis = 0
+    if first_axis == 0:
+        second_axis = 1
+    # compute axis-wide median and count metrics
+    med_first = np.ma.median(a, axis=first_axis)
+    count_first = np.ma.count(a,axis=first_axis)
+    
+    # if an axis has lower than the min_axes_count the number of pixels, the median offset for that axis is set to 0, assuming it to be unreliable
+    idx_first = count_first<min_axes_count
+    med_first[idx_first] = 0
+
+    # apply savgol filter to smoothen the signal
+    if sav_filter:
+        med_first_smooth = scipy.signal.savgol_filter(med_first,window_length=sg_window, polyorder=sg_poly, mode='nearest')
+        first_correction_surface = np.expand_dims(med_first_smooth,axis=first_axis)
+    else:
+        first_correction_surface = np.expand_dims(med_first,axis=first_axis)
+    # correct the first axis with the smoothed curve
+    b = a - first_correction_surface
+    
+    # if correction is only to be performed over first axis, return a zero magnitude signal
+    if first_axis_only:
+        if second_axis == 1:
+            shp_axis = 0
+        else:
+            shp_axis = 1
+        med_second = np.zeros(a.shape[shp_axis])
+        
+    # if correction is to be performed both axes
+    else:
+        # compute axis-wide median and count metrics
+        med_second = np.ma.median(b, axis=second_axis)
+        count_second = np.ma.count(a,axis=second_axis)
+        # if an axis has lower than the min_axes_count the number of pixels, the median offset for that axis is set to 0, assuming it to be unreliable
+        idx_second = count_second<min_axes_count
+        med_second[idx_second] = 0
+    
+    # apply savgol filter to smoothen the signal 
+    if sav_filter:
+        med_second_smooth = scipy.signal.savgol_filter(med_second,window_length=sg_window, polyorder=sg_poly, mode='nearest')
+        second_correction_surface = np.expand_dims(med_second_smooth,axis=second_axis)
+    else:
+        second_correction_surface = np.expand_dims(med_second_smooth,axis=second_axis)
+    b = b - second_correction_surface
+    out = [b,med_first,med_second,first_correction_surface,second_correction_surface]
+    if sav_filter:
+        out.extend([med_first_smooth,med_second_smooth])
+    return out
+
+def plot_ct_at_dh_map(ax,dh_init,clim_dh,ct_correction_surface,at_correction_surface,dh_final):
+    """
+    Plot initial elevation difference map, Across-track (Row-wise) and Along-track (Column-wise) correction surface and corrected elevation difference map
+    Parameters
+    ------------
+    ax: list
+        list of matplotlib axes object (4 in number)
+    dh_init: np.ma.array
+        initial dh map
+    clim_dh: tuple
+        symmetrical min/max values to limit elevation difference map
+    ct_correction_surface: np.array
+        Across-track (Row-wise) correction fit
+    at_correction_surface: np.array
+        Along-track (Col-wise) correction fit
+    dh_final: np.ma.array
+        final dh map (after correction applied)
+    """
+    pltlib.iv(dh_init,cmap='RdBu',clim=clim_dh,label='Elevation difference (m)',title='dh before',ax=ax[0])
+    pltlib.add_scalebar(ax=ax[0],res=1)
+    #across_track_clim = malib.calcperc_sym(ct_correction_surface,(2,98))
+    pltlib.iv(np.zeros(dh_init.shape)+ct_correction_surface,cmap='RdBu',clim=clim_dh,label='Elevation difference (m)',title='Row-wise correction surface',ax=ax[1])
+    #along_track_clim = malib.calcperc_sym(at_correction_surface,(2,98))
+    pltlib.iv(np.zeros(dh_init.shape)+at_correction_surface,cmap='RdBu',clim=clim_dh,label='Elevation difference (m)',title='Column-wise correction surface',ax=ax[2])
+    pltlib.iv(dh_final,cmap='RdBu',clim=clim_dh,label='Elevation difference (m)',title='dh after',ax=ax[3])
+    plt.tight_layout()
+
+def plot_ct_at_dh_fits(f,ct_med,ct_smooth,at_med,at_smooth,clim_dh=None):
+    """
+    Plot Across-track (Row-wise) and Along-track (Column-wise) correction fits
+    Parameters
+    ------------
+    f: matplotlib figure object
+        Generated using plt.figure(figsize=(8,6))
+    ct_med: np.array 
+        median error per-row (dh_map.shape[1],1)
+    ct_smooth: np.array
+        Smooth fit to median error per-row computed using Sav-Golay fit
+    at_med: np.array
+        median error per column (1,dh_map.shape[0])
+    at_smooth:np.array
+        Smooth fit to median error per-column computed using Sav-Golay fit
+    clim_dh: tuple
+        symmetrical min/max values to limit correction fits
+        
+    """
+    ax1 = plt.subplot(1,2,1)
+    ax1.plot(ct_med,np.arange(len(ct_med)),c='k',label='median correction')
+    ax1.plot(ct_smooth,np.arange(len(ct_med)),c='r',label='smooth Sav-Golay fit')
+    ax1.set_title('Row-wise correction')
+    ax1.set_xlabel('Elevation difference (m)')
+    ax1.axvline(x=0,ls='--',alpha=0.6,c='teal')
+    ax1.set_ylabel('Row number')
+    ax1.legend()
+    
+    ax2 = plt.subplot(1,2,2)
+    ax2.plot(np.arange(len(at_med)),at_med,c='k',label='median correction')
+    ax2.plot(np.arange(len(at_med)),at_smooth,c='r',label='smooth Sav-Golay fit')
+    ax2.axhline(y=0,ls='--',alpha=0.6,c='teal')
+    ax2.set_title('Column-wise correction')
+    ax2.set_ylabel('Elevation difference (m)')
+    ax2.set_xlabel('Col number')
+    ax2.legend()
+    # make row col aspect equal
+    xlim2 = ax1.get_ylim()
+    ax2.set_xlim(xlim2)
+    
+    # if yes, this will make elevation difference aspect equal
+    if clim_dh is not None:
+        ax1.set_xlim(clim_dh)
+        ax2.set_ylim(clim_dh)
+    plt.tight_layout()
+
+def ct_at_correction_wrapper(src_dem_fn,dh_fn,dh_filt_fn,ct_only=False,sg_window=101,sg_poly=2,min_axes_count=350,outdir=None):
+    """
+    Wrapper function to apply across-track (row-wise) and along-track correction to difference maps and src DEM
+    Parameters
+    ------------  
+    src_dem_fn: str
+        path to source DEM after invocation of dem_align.py (*align.tif)
+    dh_fn: str
+        path to dh map produced by dem_align.py (*align_dh.tif)
+    dh_filt_fn: str
+        path to filtered dh map produced by dem_align.py (*align_dh_filt.tif)
+    ct_only: bool
+        only correct for across-track (row-wise) errors and ignore Along-track errors
+    sg_window: int
+        odd window sizes to be used in Savitzky-Golay filtering
+    sg_poly: int
+        Polynomial order used in Savitzky-Golay filtering
+    min_axes_count: int
+        minimum number of filtered pixels in any given axes for that axes to contribute to stats computation
+    outdir: str
+        path to output directory
+    writeout: bool
+        Write corrected source DEM, difference maps and plots to disc (not used currently)
+    """
+    # warp the difference maps to extent and resolution of source DEMs
+    print("Step1: Warping difference maps to extent of source DEM")
+    ds_list = warplib.memwarp_multi_fn([src_dem_fn,dh_fn,dh_filt_fn],res='first',extent='first',r='cubic')
+    
+    # read into memory
+    src_dem,dh,dh_filt = [iolib.ds_getma(ds) for ds in ds_list]
+    
+    # calculate clim
+    clim_dh = malib.calcperc_sym(dh_filt,(5,95))
+    # perform the correction
+    print("Computing Across-track (Row-wise) and Along-track (Column-wise) correction")
+    dh_filt_corr,ct_med,at_med,ct_correction_surface,at_correction_surface, ct_med_smooth, at_med_smooth = successive_med(dh_filt,
+                                                                                                                          first_axis_only=ct_only,sav_filter=True,
+                                                                                                                          sg_window=sg_window,sg_poly=sg_poly,
+                                                                                                                          min_axes_count=min_axes_count)
+    # prepare the plots
+    out_dh_fig = os.path.splitext(dh_fn)[0] + '_ct_at_dh_map.png'
+    print(f"Creating Across-track (Row-wise) and Along-track (Column-wise) difference map figure at {out_dh_fig}")
+    f,ax = plt.subplots(1,4,figsize=(12,5))
+    
+    plot_ct_at_dh_map(ax,dh_filt,clim_dh,ct_correction_surface,at_correction_surface,dh_filt_corr)
+    f.savefig(out_dh_fig, dpi=300,bbox_inches='tight', pad_inches=0.1)
+    
+    out_lineplot_fig = os.path.splitext(dh_fn)[0] + '_ct_at_correction_fit.png'
+    print(f"Creating Across-track (Row-wise) and Along-track (Column-wise) correction fits figure at {out_lineplot_fig}")
+    fig = plt.figure(figsize=(8,4))
+    plot_ct_at_dh_fits(fig,ct_med,ct_med_smooth,at_med,at_med_smooth,clim_dh=clim_dh)
+    fig.savefig(out_lineplot_fig,dpi=300,bbox_inches='tight', pad_inches=0.1)
+    
+    # Correct source DEM
+    src_dem_corrected = src_dem - ct_correction_surface
+    src_dem_corrected = src_dem_corrected - at_correction_surface
+    src_dem_corrected_fn = os.path.splitext(src_dem_fn)[0]+'_ct_at_corrected.tif'
+    print(f"Writing out corrected source DEM at {src_dem_corrected_fn}")
+    iolib.writeGTiff(src_dem_corrected,src_dem_corrected_fn,src_ds=ds_list[0])
+    
+    # correct difference map
+    # this is the entire difference map from which the filtered map is derived (containing glacier etc)
+    dh_corrected = dh - ct_correction_surface
+    dh_corrected = dh_corrected - at_correction_surface
+    dh_corrected_fn = os.path.splitext(dh_fn)[0]+'_ct_at_corrected.tif'
+    print(f"Writing out corrected elevation difference map at {dh_corrected_fn}")
+    iolib.writeGTiff(dh_corrected,dh_corrected_fn,src_ds=ds_list[1])
+    
+    # write out filtered difference map
+    dh_filt_corrected_fn = os.path.splitext(dh_filt_fn)[0]+'_ct_at_corrected.tif'
+    print(f"Writing out corrected elevation difference map at {dh_filt_fn}")
+    iolib.writeGTiff(dh_filt_corr,dh_filt_corrected_fn,src_ds=ds_list[2])
+    
+    print("Across-track (row-wise), Along-track (col-wise) correction complete")
+
+   
