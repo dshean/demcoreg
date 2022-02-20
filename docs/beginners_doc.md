@@ -10,7 +10,7 @@ The demcoreg README.md provides a basic overview of installation and usage for u
 1. Install conda. Managing python packages is best done using conda. You can download miniconda for your OS/architecture here: https://docs.conda.io/en/latest/miniconda.html
 2. Open a terminal/shell
 3. Create and activate a Python environment called demcoreg_env with necessary packages installed:
-  - Run this command to create an environment: `conda create -c conda-forge -n demcoreg_env python=3.7 gdal=2.4 rasterio geopandas` 
+  - Run this command to create an environment: `conda create -c conda-forge -n demcoreg_env python gdal rasterio geopandas` 
   - After this completes, the new environment must be "activated". You can do this with: `conda activate demcoreg_env`
     - *Note: you will need to activate each time you start a new terminal session*
 4. Prepare to install software from github (this needs to be done only once)
@@ -24,7 +24,7 @@ The demcoreg README.md provides a basic overview of installation and usage for u
   - `pip install -e pygeotools/`
   - `pip install -e demcoreg/`
   - `pip install -e imview/`
-7. In addition to Python modules, these packages also contain some command-line scripts.  While you can always run these scripts from the terminal using a full path (e.g., `~/src/pygeotools/pygeotools/warptool.py`), it's convenient to run them using only `warptool.py`. To accomplish this, you can add the directory to the `~/.bashrc` (or `~/.bash_profile`) file in your home directory.
+7. In addition to Python modules, these packages also contain some command-line scripts.  While you can always run these scripts from the terminal using a full path (e.g., `~/src/demcoreg/demcoreg/dem_align.py`), it's convenient to run them using only `dem_align.py`. To accomplish this, you can add the directory to the `~/.bashrc` (or `~/.bash_profile`) file in your home directory.
   - To get the full path name `realpath demcoreg/demcoreg`
   - Open `~/.bashrc` (or `~/.bash_profile`) in a text editor of your choice, and add this line to the end of the file: `export PATH="~/src/pygeotools/pygeotools:~/src/demcoreg/demcoreg:~/src/imview/imview:$PATH"`
     - Navigate to your home directory using `cd ~`
