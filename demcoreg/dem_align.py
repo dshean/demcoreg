@@ -562,10 +562,10 @@ def main(argv=None):
         axa[0,2].imshow(~static_mask, clim=(0,1), cmap='gray', **kwargs)
         axa[0,2].set_title('Surfaces for co-registration')
         dz_clim = malib.calcperc_sym(diff_orig_compressed, (5, 95))
-        im = axa[1,0].imshow(diff_orig, cmap='RdBu', clim=dz_clim)
+        im = axa[1,0].imshow(diff_orig, cmap='RdBu', clim=dz_clim, **kwargs)
         pltlib.add_cbar(axa[1,0], im, arr=diff_orig, clim=dz_clim, label=None)
         axa[1,0].set_title('Elev. Diff. Before (m)')
-        im = axa[1,1].imshow(diff_align, cmap='RdBu', clim=dz_clim)
+        im = axa[1,1].imshow(diff_align, cmap='RdBu', clim=dz_clim, **kwargs)
         pltlib.add_cbar(axa[1,1], im, arr=diff_align, clim=dz_clim, label=None)
         axa[1,1].set_title('Elev. Diff. After (m)')
 
@@ -573,7 +573,7 @@ def main(argv=None):
         tight_dz_clim = (-2.0, 2.0)
         #tight_dz_clim = (-10.0, 10.0)
         #tight_dz_clim = malib.calcperc_sym(diff_align_filt, (5, 95))
-        im = axa[1,2].imshow(diff_align_filt, cmap='RdBu', clim=tight_dz_clim)
+        im = axa[1,2].imshow(diff_align_filt, cmap='RdBu', clim=tight_dz_clim, **kwargs)
         pltlib.add_cbar(axa[1,2], im, arr=diff_align_filt, clim=tight_dz_clim, label=None)
         axa[1,2].set_title('Elev. Diff. After (m)')
 
