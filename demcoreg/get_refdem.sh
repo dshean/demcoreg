@@ -3,8 +3,8 @@
 #Uses OpenTopography API to fetch reference DEM
 #https://portal.opentopography.org/apidocs/#/Public/getGlobalDem
 
-#["SRTMGL3", "SRTMGL1", "SRTMGL1_E", "AW3D30", "AW3D30_E"]
-demtype="SRTMGL1_E"
+#["SRTMGL3", "SRTMGL1", "SRTMGL1_E", "AW3D30", "AW3D30_E", "NASADEM", "COP30", "COP90"]
+demtype="COP30"
 
 minlon=$1
 minlat=$2
@@ -13,7 +13,9 @@ maxlat=$4
 
 out_fn=$5
 
-url="https://portal.opentopography.org/API/globaldem?demtype=${demtype}&south=${minlat}&north=${maxlat}&west=${minlon}&east=${maxlon}&outputFormat=GTiff" 
+api=demoapikeyot2022
+
+url="https://portal.opentopography.org/API/globaldem?demtype=${demtype}&south=${minlat}&north=${maxlat}&west=${minlon}&east=${maxlon}&outputFormat=GTiff&API_Key=${api}" 
 echo $url
 curl -X GET "$url" -H "accept: */*" --output $out_fn 
 
