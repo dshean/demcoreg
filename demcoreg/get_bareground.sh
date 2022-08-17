@@ -40,13 +40,17 @@ cd $DATADIR
 # Final processed vrt of all tiles
 be_vrt_fn=$DATADIR/bare2010.vrt
 
-# If vrt DNE, download tiles with/without overwriting (default is overwrite)
+# If vrt DNE, download tiles with/without overwriting (default is no clobber)
 overwrite=false
 if [ ! -e $be_vrt_fn ] ; then
     # This puts things into Potapov/Bare_2010 dir
     # 51GB for 504 .tifs
     echo "Downloading tiles"
-    time parallel -v wget -r -np -nH -nc --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif" &
+    if $overwrite ; then
+        time parallel -v wget -r -np -nH --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif" &
+    else
+        time parallel -v wget -r -np -nH -nc --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif" &
+    fi
 
     # move files to datadir
     echo
