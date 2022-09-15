@@ -69,14 +69,14 @@ def get_bareground_fn():
         #subprocess.call(cmd)
     return bg_fn 
 
-def get_gedi_fn(region='NAM'):
-    gedi_fn = os.path.join(datadir, f'gedi/Forest_height_2019_{region}.tif')
-    print(gedi_fn)
-    if not os.path.exists(gedi_fn):
-        cmd = ['get_gedi.sh', region]
+def get_canopyheight_fn(region='NAM'):
+    canopyheight_fn = os.path.join(datadir, f'canopyheight/Forest_height_2019_{region}.tif')
+    print(canopyheight_fn)
+    if not os.path.exists(canopyheight_fn):
+        cmd = ['get_canopyheight.sh', region]
         #subprocess.call(cmd)
-        sys.exit("Missing gedi data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
-    return gedi_fn
+        sys.exit("Missing canopy height data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
+    return canopyheight_fn
 
 #Download latest global RGI glacier db
 def get_glacier_poly():
@@ -172,15 +172,15 @@ def get_bareground_mask(bareground_ds, bareground_thresh=60, out_fn=None):
     l = None
     return mask
 
-# Create gedi mask
-def get_gedi_mask(gedi_ds, filter='ground', out_fn=None):
-    """Generate raster mask for specified GEDI vegetation class filter
+# Create canopy height mask
+def get_canopyheight_mask(canopyheight_ds, filter='ground', out_fn=None):
+    """Generate raster mask for specified global forest canopy height vegetation class filter
     """
-    print("Loading GEDI global forest canopy height")
-    b = gedi_ds.GetRasterBand(1)
+    print("Loading global forest canopy height")
+    b = canopyheight_ds.GetRasterBand(1)
     l = b.ReadAsArray()
-    print("Filtering GEDI with: %s" % filter)
-    # Original gedi products use 103 as ndv
+    print("Filtering canopy height with: %s" % filter)
+    # Original canopy height products use 103 as ndv
         #0–60 - canopy height [m]
         #101 - water
         #102 - snow/ice
@@ -198,7 +198,7 @@ def get_gedi_mask(gedi_ds, filter='ground', out_fn=None):
     #Write out original data
     if out_fn is not None:
         print("Writing out %s" % out_fn)
-        iolib.writeGTiff(l, out_fn, gedi_ds)
+        iolib.writeGTiff(l, out_fn, canopyheight_ds)
     l = None
     return mask
 
@@ -310,11 +310,11 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
     import re
     import requests
     from bs4 import BeautifulSoup
-    # auth = iolib.get_auth()
-    from requests.auth import HTTPDigestAuth
-    uname=''
-    pw=''
-    auth = HTTPDigestAuth(uname, pw)
+    auth = iolib.get_auth()
+    # from requests.auth import HTTPDigestAuth
+    # uname=''
+    # pw=''
+    # auth = HTTPDigestAuth(uname, pw)
 
     pad_days = timedelta(days=pad_days)
     dt_list = timelib.dt_range(dem_dt-pad_days, dem_dt+pad_days+timedelta(1), timedelta(1))
@@ -486,6 +486,8 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
         if dem_fn is not None:
             #Extract DEM timestamp
             dem_dt = timelib.fn_getdatetime(dem_fn)
+            if dem_dt is None and args.dem_dt is not None:
+                dem_dt=datetime.strptime(args.dem_dt, "%Y%m%d")
             out_fn_base = os.path.join(outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0])
         
         if args is None:
@@ -600,23 +602,23 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
                 iolib.writeGTiff(toa_mask, out_fn, src_ds=dem_ds)
             newmask = np.logical_and(toa_mask, newmask)
 
-        if 'gedi' in mask_list:
+        if 'canopy' in mask_list:
             # Will need to think about how to warp this...
-            gedi_ds = gdal.Open(get_gedi_fn())
-            gedi_ds_warp = warplib.memwarp_multi([gedi_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
+            canopyheight_ds = gdal.Open(get_canopyheight_fn())
+            canopyheight_ds_warp = warplib.memwarp_multi([canopyheight_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
             out_fn = None
             if writeout:
-                out_fn = out_fn_base+'_gedi.tif'
-            # gedi_mask = get_gedi_mask(gedi_ds_warp, out_fn=out_fn)
-            gedi_ground = iolib.ds_getma(gedi_ds_warp)
-            gedi_mask = (gedi_ground.filled(0) > 1) 
-            gedi_mask = ~(gedi_mask)
+                out_fn = out_fn_base+'_canopy.tif'
+            canopy_mask = get_canopyheight_mask(canopyheight_ds_warp, filter=args.canopy_filter, out_fn=out_fn)
+            # ground = iolib.ds_getma(canopy_ds_warp)
+            # canopy_mask = (ground.filled(0) > 1) 
+            # canopy_mask = ~(canopy_mask)
 
             if writeout:
                 out_fn = os.path.splitext(out_fn)[0]+'_mask.tif'
                 print("Writing out %s" % out_fn)
-                iolib.writeGTiff(gedi_mask, out_fn, src_ds=dem_ds)
-            newmask = np.logical_and(gedi_mask, newmask)
+                iolib.writeGTiff(canopy_mask, out_fn, src_ds=dem_ds)
+            newmask = np.logical_and(canopy_mask, newmask)
 
         if False:
             #Filter based on expected snowline
@@ -640,7 +642,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
     return newmask
 
 #Can add "mask_list" argument, instead of specifying individually
-mask_choices = ['toa', 'snodas', 'modscag', 'bareground', 'glaciers', 'nlcd', 'gedi', 'none']
+mask_choices = ['toa', 'snodas', 'modscag', 'bareground', 'glaciers', 'nlcd', 'canopy', 'none']
 def getparser():
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
@@ -659,10 +661,11 @@ def getparser():
     parser.add_argument('--nlcd', action='store_true', help="Enable NLCD LULC filter (for CONUS)")
     nlcd_filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water', 'barren+flatlowveg', 'none']
     parser.add_argument('--nlcd_filter', type=str, default='not_forest', choices=nlcd_filter_choices, help='Preserve these NLCD pixels (default: %(default)s)') 
-    parser.add_argument('--gedi', action='store_true', help="Enable GEDI filter (for CONUS)")
-    gedi_filter_choices = ['ground', 'water', 'snow_ice', 'water+snow_ice', 'none']
-    parser.add_argument('--gedi_filter', type=str, default='ground', choices=gedi_filter_choices, help='Preserve these GEDI pixels (default: %(default)s)') 
+    parser.add_argument('--canopy', action='store_true', help="Enable global canopy height filter (for CONUS)")
+    canopy_filter_choices = ['ground', 'water', 'snow_ice', 'water+snow_ice', 'none']
+    parser.add_argument('--canopy_filter', type=str, default='ground', choices=canopy_filter_choices, help='Preserve these canopy height pixels (default: %(default)s)') 
     parser.add_argument('--dilate', type=int, default=None, help='Dilate mask with this many iterations (default: %(default)s)')
+    parser.add_argument('--dem_dt', type=str, default=None, help='Manually input DEM datetime as YYYYMMDD')
     return parser
 
 def main():
@@ -676,7 +679,7 @@ def main():
     if args.bareground: mask_list.append('bareground') 
     if args.glaciers: mask_list.append('glaciers') 
     if args.nlcd: mask_list.append('nlcd') 
-    if args.gedi: mask_list.append('gedi') 
+    if args.canopy: mask_list.append('canopy') 
 
     if not mask_list:
         parser.print_help()
@@ -721,7 +724,10 @@ def main():
     print("%0.2f std in masked output tif to be used as ref" % validpx_std)
     #if (validpx_count > min_validpx_count) and (validpx_std > min_validpx_std):
     if (validpx_count > min_validpx_count):
-        out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+f'_{args.modscag_thresh}thresh_ref.tif')
+        if args.modscag: 
+            out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+f'_{args.modscag_thresh}thresh_ref.tif')
+        else:
+            out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+'_ref.tif')
         print("Writing out %s" % out_fn)
         iolib.writeGTiff(newdem, out_fn, src_ds=dem_ds)
     else:
