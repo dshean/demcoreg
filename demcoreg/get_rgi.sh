@@ -31,7 +31,9 @@ fi
 
 #Check MD5 sum
 #95bd0486301073bbbe26988303fdaa1d  00_rgi60.zip
-orig_zip_md5=95bd0486301073bbbe26988303fdaa1d
+#orig_zip_md5=95bd0486301073bbbe26988303fdaa1d
+#Update on 2022-09-08
+orig_zip_md5=9ddfdfe9e65c9550bdb8c5c98c4e1aff
 
 #Should check OS with uname
 if [ -x "$(command -v md5)" ]; then
