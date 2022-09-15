@@ -13,7 +13,7 @@
 # SASIA:      South Asia region          [4.7 GB]
 
 # Usage
-# ./get_gedi.sh [ region ] [ output data directory] 
+# ./get_canopyheight.sh [ region ] [ output data directory] 
 
 ###################################################################################################
 # Help
@@ -24,11 +24,11 @@ Help()
    echo "https://glad.umd.edu/dataset/gedi/"
    echo
    echo "Usage:"
-   echo "get_gedi.sh [ REGIONCODE ] [ output data directory ]"
+   echo "get_canopyheight.sh [ REGIONCODE ] [ output data directory ]"
    echo
    echo "Defaults"
    echo "       region      NAM (North America)"
-   echo "       datadir     $HOME/data/gedi"
+   echo "       datadir     $HOME/data/canopyheight"
    echo
    echo "Available (continental) regions"
    echo "       AUS:        Australasia region         [1.5 GB]"
@@ -70,7 +70,7 @@ fi
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
 
 if [ -z "$DATADIR" ] ; then
-    export DATADIR=$HOME/data/gedi
+    export DATADIR=$HOME/data/canopyheight
 fi
 
 if [ ! -e $DATADIR ] ; then
@@ -79,23 +79,23 @@ fi
 
 cd $DATADIR
 
-# Global 2019 GEDI grids, 30m from https://glad.geog.umd.edu/Potapov/Forest_height_2019/
+# Global 2019 grids, 30m from https://glad.geog.umd.edu/Potapov/Forest_height_2019/
 url="https://glad.geog.umd.edu/Potapov/Forest_height_2019/Forest_height_2019_${region}.tif"
-gedi_fn="Forest_height_2019_${region}.tif"
+canopyheight_fn="Forest_height_2019_${region}.tif"
 
-if [ ! -e $gedi_fn ] ; then
-    echo "Downloading $gedi_fn"
-    wget -O $gedi_fn $url
+if [ ! -e $canopyheight_fn ] ; then
+    echo "Downloading $canopyheight_fn"
+    wget -O $canopyheight_fn $url
 else
-    echo "Found existing ${gedi_fn}"
+    echo "Found existing ${canopyheight_fn}"
 fi
 
 # Haven't tested this yet, checking to see if the bits are already as compressed as can be
-if ! gdalinfo $gedi_fn | grep -q LZW ; then
-    echo "Compressing $gedi_fn"
-    gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=IF_SAFER $gedi_fn temp.tif
+if ! gdalinfo $canopyheight_fn | grep -q LZW ; then
+    echo "Compressing $canopyheight_fn"
+    gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=IF_SAFER $canopyheight_fn temp.tif
     if [ $? -eq 0 ] ; then
-        mv temp.tif $gedi_fn
+        mv temp.tif $canopyheight_fn
     fi
 fi
 ###################################################################################################
