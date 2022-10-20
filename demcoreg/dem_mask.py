@@ -352,7 +352,7 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
             modscag_url_fn = []
             if r.ok:
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
             if not modscag_url_fn:
                 #Couldn't find historic, try to use real-time products
                 modscag_url_str = 'https://snow-data.jpl.nasa.gov/modscag/%Y/%j/' 
@@ -361,7 +361,7 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
                 r = requests.get(modscag_url_base, auth=auth)
             if r.ok: 
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
             if not modscag_url_fn:
                 print("Unable to fetch MODSCAG for %s" % dt)
             else:
@@ -369,12 +369,14 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
                 #Fetch all tiles
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
-                if modscag_url_fn:
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
+                if modscag_url_fn: 
                     modscag_url_fn = modscag_url_fn[0]
+                    modscag_url_fn=modscag_url_fn.get('href')
                     modscag_url = os.path.join(modscag_url_base, modscag_url_fn)
                     print(modscag_url)
-                    modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
+                    #modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
+                    modscag_fn = os.path.join(outdir, modscag_url_fn)
                     if not os.path.exists(modscag_fn):
                         iolib.getfile2(modscag_url, auth=auth, outdir=outdir)
                     modscag_fn_list.append(modscag_fn)
@@ -560,14 +562,14 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
                         print("SNODAS grid for input location and timestamp is empty")
 
         #These tiles cover CONUS
-        #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+        tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
         if 'modscag' in mask_list and args.modscag_thresh > 0:
             modscag_min_dt = datetime(2000,2,24)
             if dem_dt < modscag_min_dt: 
                 print("Warning: DEM timestamp (%s) is before earliest MODSCAG timestamp (%s)" \
                         % (dem_dt, modscag_min_dt))
             else:
-                tile_list = get_modis_tile_list(dem_ds)
+                # tile_list = get_modis_tile_list(dem_ds)
                 print(tile_list)
                 pad_days=7
                 modscag_fn_list = get_modscag_fn_list(dem_dt, tile_list=tile_list, pad_days=pad_days)
