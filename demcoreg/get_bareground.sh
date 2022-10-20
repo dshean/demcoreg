@@ -25,7 +25,6 @@
 # increments by 10˚ in both lat and lon
 
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
-
 if [ -z "$DATADIR" ] ; then
     export DATADIR=$HOME/data/bare
 fi
@@ -47,18 +46,17 @@ if [ ! -e $be_vrt_fn ] ; then
     # 51GB for 504 .tifs
     echo "Downloading tiles"
     if $overwrite ; then
-        time parallel -v wget -r -np -nH --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif" &
+        time parallel -v wget -r -np -nH --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif"
     else
-        time parallel -v wget -r -np -nH -nc --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif" &
-    fi
-
+        time parallel -v wget -r -np -nH -nc --no-check-certificate -A {} https://glad.umd.edu/Potapov/Bare_2010/ ::: "[0-9][0-9][NS]_[0-9][0-9][0-9][EW].tif"
+    fi &&
     # move files to datadir
     echo
-    echo "Moving tifs ../Potapov/Bare_2010/*tif $DATADIR"
-    mv ../Potapov/Bare_2010/*tif $DATADIR
+    echo "Moving tifs $DATADIR/Potapov/Bare_2010/*tif $DATADIR"
+    mv $DATADIR/Potapov/Bare_2010/*tif $DATADIR
     echo
     echo "Removing empty dirs"
-    rm -r ../Potapov
+    rm -r $DATADIR/Potapov
     #Now create a vrt for all input data
     #Set nodata as 255, as 0 is valid bare ground percentage
     echo "Building vrt of cleaned tiles: $be_vrt_fn"
