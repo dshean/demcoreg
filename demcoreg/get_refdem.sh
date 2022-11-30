@@ -47,4 +47,4 @@ gdal_translate $opt $out_fn ${out_fn%.*}_lzw.tif
 dem_geoid --reverse-adjustment --geoid EGM2008 ${out_fn%.*}_lzw.tif
 
 #Reproject to UTM
-gdalwarp $gdal_opt -r cubic -t_srs EPSG:$epsg ${out_fn%.*}_lzw-adj.tif ${out_fn%.*}_lzw-adj_proj.tif
+gdalwarp $opt -r cubic -t_srs EPSG:$epsg ${out_fn%.*}_lzw-adj.tif ${out_fn%.*}_lzw-adj_proj.tif
