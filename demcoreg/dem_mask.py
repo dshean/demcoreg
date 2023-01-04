@@ -31,7 +31,7 @@ from pygeotools.lib import iolib, warplib, geolib, timelib
 
 datadir = iolib.get_datadir()
 
-def get_nlcd_fn(yr=2016):
+def get_nlcd_fn(yr=2019):
     """Calls external shell script `get_nlcd.sh` to fetch:
 
     Land Use Land Cover (nlcd) grids, 30 m

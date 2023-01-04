@@ -14,8 +14,8 @@ yr=$1
 
 # Default is 2016
 if [ -z "$yr" ] ; then
-    echo "Using default NLCD year 2016"
-    yr=2016
+    echo "Using default NLCD year 2019"
+    yr=2019
 fi
 
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
