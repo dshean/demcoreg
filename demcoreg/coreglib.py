@@ -682,6 +682,7 @@ def ct_at_correction_wrapper(src_dem_fn, dh_fn, dh_filt_fn, ct_only=False, sg_wi
     writeout: bool
         Write corrected source DEM, difference maps and plots to disc (not used currently)
     """
+    import os
     # warp the difference maps to extent and resolution of source DEMs
     print("Warping difference maps to extent of source DEM")
     ds_list = warplib.memwarp_multi_fn([src_dem_fn, dh_fn, dh_filt_fn], res='first', extent='first', r='cubic')
