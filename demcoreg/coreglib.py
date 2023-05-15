@@ -334,7 +334,7 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
             s=3
             #This is inefficient, but we have list of arrays with different length, need to filter
             #Reduntant with earlier filter, should refactor
-            bp = ax.boxplot(np.array(output)[idx][::s], positions=bin_centers[::s], widths=widths[::s], showfliers=False, \
+            bp = ax.boxplot(np.array(output,dtype=object)[idx][::s], positions=bin_centers[::s], widths=widths[::s], showfliers=False, \
                     patch_artist=True, boxprops=boxprops, whiskerprops=whiskerprops, capprops=capprops, \
                     medianprops=medianprops)
             bin_ticks = [0, 45, 90, 135, 180, 225, 270, 315, 360]
