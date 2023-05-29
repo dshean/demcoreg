@@ -35,7 +35,7 @@ def get_nlcd_fn(yr=2019):
     """Calls external shell script `get_nlcd.sh` to fetch:
 
     Land Use Land Cover (nlcd) grids, 30 m
-    2011, 2013 or 2016 (default)
+    2011, 2013, 2016, or 2019 (default)
     
     http://www.mrlc.gov/nlcd11_leg.php
     """
@@ -68,6 +68,15 @@ def get_bareground_fn():
         sys.exit("Missing bareground data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
         #subprocess.call(cmd)
     return bg_fn 
+
+def get_canopyheight_fn(region='NAM'):
+    canopyheight_fn = os.path.join(datadir, f'canopyheight/Forest_height_2019_{region}.tif')
+    print(canopyheight_fn)
+    if not os.path.exists(canopyheight_fn):
+        cmd = ['get_canopyheight.sh', region]
+        #subprocess.call(cmd)
+        sys.exit("Missing canopy height data source. If already downloaded, specify correct datadir. If not, run `%s` to download" % cmd[0])
+    return canopyheight_fn
 
 #Download latest global RGI glacier db
 def get_glacier_poly():
@@ -133,6 +142,9 @@ def get_nlcd_mask(nlcd_ds, filter='not_forest', out_fn=None):
         mask = ~(np.logical_or(np.logical_or((l==41),(l==42)),(l==43)))
     elif filter == 'not_forest+not_water':
         mask = ~(np.logical_or(np.logical_or(np.logical_or((l==41),(l==42)),(l==43)),(l==11)))
+    elif filter == 'barren+flatlowveg':
+        # rock+ice+shrub+scrub+grass+sedge+pasture+wetlands was too long
+        mask = np.logical_or(np.logical_or(np.logical_or(np.logical_or(np.logical_or(np.logical_or(np.logical_or(np.logical_or((l==12),(l==31)),(l==51)),(l==52)),(l==71)),(l==72)),(l==81)),(l==90)),(l==95))
     else:
         print("Invalid mask type")
         mask = None
@@ -157,6 +169,36 @@ def get_bareground_mask(bareground_ds, bareground_thresh=60, out_fn=None):
     if out_fn is not None:
         print("Writing out %s" % out_fn)
         iolib.writeGTiff(l, out_fn, bareground_ds)
+    l = None
+    return mask
+
+# Create canopy height mask
+def get_canopyheight_mask(canopyheight_ds, filter='ground', out_fn=None):
+    """Generate raster mask for specified global forest canopy height vegetation class filter
+    """
+    print("Loading global forest canopy height")
+    b = canopyheight_ds.GetRasterBand(1)
+    l = b.ReadAsArray()
+    print("Filtering canopy height with: %s" % filter)
+    # Original canopy height products use 103 as ndv
+        #0–60 - canopy height [m]
+        #101 - water
+        #102 - snow/ice
+    if filter == 'ground':
+        mask = (l==1)
+    elif filter == 'water':
+        mask = (l==101)
+    elif filter == 'snow_ice':
+        mask = (l==102)
+    elif filter == 'water+snow_ice':
+        mask = np.logical_or((l==101),(l==102))
+    else:
+        print("Invalid mask type")
+        mask = None
+    #Write out original data
+    if out_fn is not None:
+        print("Writing out %s" % out_fn)
+        iolib.writeGTiff(l, out_fn, canopyheight_ds)
     l = None
     return mask
 
@@ -269,6 +311,11 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
     import requests
     from bs4 import BeautifulSoup
     auth = iolib.get_auth()
+    # from requests.auth import HTTPDigestAuth
+    # uname=''
+    # pw=''
+    # auth = HTTPDigestAuth(uname, pw)
+
     pad_days = timedelta(days=pad_days)
     dt_list = timelib.dt_range(dem_dt-pad_days, dem_dt+pad_days+timedelta(1), timedelta(1))
 
@@ -282,9 +329,16 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
         #If we already have a vrt and it contains all of the necessary tiles
         if os.path.exists(out_vrt_fn):
             vrt_ds = gdal.Open(out_vrt_fn)
-            if np.all([np.any([tile in sub_fn for sub_fn in vrt_ds.GetFileList()]) for tile in tile_list]):
+            # hack to avoid tile checking on M1
+            checktiles=False
+            if checktiles:
+                if np.all([np.any([tile in sub_fn for sub_fn in vrt_ds.GetFileList()]) for tile in tile_list]):
+                    out_vrt_fn_list.append(out_vrt_fn)
+                    continue
+            else:
                 out_vrt_fn_list.append(out_vrt_fn)
                 continue
+
         #Otherwise, download missing tiles and rebuild
         #Try to use historic products
         modscag_fn_list = []
@@ -298,7 +352,7 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
             modscag_url_fn = []
             if r.ok:
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
             if not modscag_url_fn:
                 #Couldn't find historic, try to use real-time products
                 modscag_url_str = 'https://snow-data.jpl.nasa.gov/modscag/%Y/%j/' 
@@ -307,7 +361,7 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
                 r = requests.get(modscag_url_base, auth=auth)
             if r.ok: 
                 parsed_html = BeautifulSoup(r.content, "html.parser")
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
             if not modscag_url_fn:
                 print("Unable to fetch MODSCAG for %s" % dt)
             else:
@@ -315,12 +369,14 @@ def get_modscag_fn_list(dem_dt, tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05
                 #Now extract actual tif filenames to fetch from html
                 parsed_html = BeautifulSoup(r.content, "html.parser")
                 #Fetch all tiles
-                modscag_url_fn = parsed_html.findAll(text=re.compile('%s.*snow_fraction.tif' % tile))
-                if modscag_url_fn:
+                modscag_url_fn = parsed_html.find_all(href=re.compile(f'{tile}.*?snow_fraction.tif'))
+                if modscag_url_fn: 
                     modscag_url_fn = modscag_url_fn[0]
+                    modscag_url_fn=modscag_url_fn.get('href')
                     modscag_url = os.path.join(modscag_url_base, modscag_url_fn)
                     print(modscag_url)
-                    modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
+                    #modscag_fn = os.path.join(outdir, os.path.split(modscag_url_fn)[-1])
+                    modscag_fn = os.path.join(outdir, modscag_url_fn)
                     if not os.path.exists(modscag_fn):
                         iolib.getfile2(modscag_url, auth=auth, outdir=outdir)
                     modscag_fn_list.append(modscag_fn)
@@ -432,6 +488,8 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
         if dem_fn is not None:
             #Extract DEM timestamp
             dem_dt = timelib.fn_getdatetime(dem_fn)
+            if dem_dt is None and args.dem_dt is not None:
+                dem_dt=datetime.strptime(args.dem_dt, "%Y%m%d")
             out_fn_base = os.path.join(outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0])
         
         if args is None:
@@ -504,17 +562,18 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
                         print("SNODAS grid for input location and timestamp is empty")
 
         #These tiles cover CONUS
-        #tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
+        tile_list=('h08v04', 'h09v04', 'h10v04', 'h08v05', 'h09v05')
         if 'modscag' in mask_list and args.modscag_thresh > 0:
             modscag_min_dt = datetime(2000,2,24)
             if dem_dt < modscag_min_dt: 
                 print("Warning: DEM timestamp (%s) is before earliest MODSCAG timestamp (%s)" \
                         % (dem_dt, modscag_min_dt))
             else:
-                tile_list = get_modis_tile_list(dem_ds)
+                # tile_list = get_modis_tile_list(dem_ds)
                 print(tile_list)
                 pad_days=7
                 modscag_fn_list = get_modscag_fn_list(dem_dt, tile_list=tile_list, pad_days=pad_days)
+                print('modscag_fn_list is', modscag_fn_list)
                 if modscag_fn_list:
                     modscag_ds = proc_modscag(modscag_fn_list, extent=dem_ds, t_srs=dem_ds)
                     modscag_ds_warp = warplib.memwarp_multi([modscag_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
@@ -528,7 +587,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
                     modscag_mask = (modscag_fsca.filled(0) >= args.modscag_thresh) 
                     modscag_mask = ~(modscag_mask)
                     if writeout:
-                        out_fn = os.path.splitext(out_fn)[0]+'_mask.tif'
+                        out_fn = os.path.splitext(out_fn)[0]+f'_{args.modscag_thresh}thresh_mask.tif'
                         print("Writing out %s" % out_fn)
                         iolib.writeGTiff(modscag_mask, out_fn, src_ds=dem_ds)
                     newmask = np.logical_and(modscag_mask, newmask)
@@ -544,6 +603,24 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
                 print("Writing out %s" % out_fn)
                 iolib.writeGTiff(toa_mask, out_fn, src_ds=dem_ds)
             newmask = np.logical_and(toa_mask, newmask)
+
+        if 'canopy' in mask_list:
+            # Will need to think about how to warp this...
+            canopyheight_ds = gdal.Open(get_canopyheight_fn())
+            canopyheight_ds_warp = warplib.memwarp_multi([canopyheight_ds,], res=dem_ds, extent=dem_ds, t_srs=dem_ds, r='cubicspline')[0]
+            out_fn = None
+            if writeout:
+                out_fn = out_fn_base+'_canopy.tif'
+            canopy_mask = get_canopyheight_mask(canopyheight_ds_warp, filter=args.canopy_filter, out_fn=out_fn)
+            # ground = iolib.ds_getma(canopy_ds_warp)
+            # canopy_mask = (ground.filled(0) > 1) 
+            # canopy_mask = ~(canopy_mask)
+
+            if writeout:
+                out_fn = os.path.splitext(out_fn)[0]+'_mask.tif'
+                print("Writing out %s" % out_fn)
+                iolib.writeGTiff(canopy_mask, out_fn, src_ds=dem_ds)
+            newmask = np.logical_and(canopy_mask, newmask)
 
         if False:
             #Filter based on expected snowline
@@ -567,7 +644,7 @@ def get_mask(dem_ds, mask_list, dem_fn=None, writeout=False, outdir=None, args=N
     return newmask
 
 #Can add "mask_list" argument, instead of specifying individually
-mask_choices = ['toa', 'snodas', 'modscag', 'bareground', 'glaciers', 'nlcd', 'none']
+mask_choices = ['toa', 'snodas', 'modscag', 'bareground', 'glaciers', 'nlcd', 'canopy', 'none']
 def getparser():
     parser = argparse.ArgumentParser(description="Identify control surfaces for DEM co-registration") 
     parser.add_argument('dem_fn', type=str, help='DEM filename')
@@ -584,9 +661,13 @@ def getparser():
     parser.add_argument('--bareground_thresh', type=float, default=60, help='Percent bareground threshold (default: %(default)s%%, valid range 0-100), mask greater than this value (only relevant for global bareground data)')
     parser.add_argument('--glaciers', action='store_true', help="Mask glacier polygons")
     parser.add_argument('--nlcd', action='store_true', help="Enable NLCD LULC filter (for CONUS)")
-    nlcd_filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water', 'none']
+    nlcd_filter_choices = ['rock', 'rock+ice', 'rock+ice+water', 'not_forest', 'not_forest+not_water', 'barren+flatlowveg', 'none']
     parser.add_argument('--nlcd_filter', type=str, default='not_forest', choices=nlcd_filter_choices, help='Preserve these NLCD pixels (default: %(default)s)') 
+    parser.add_argument('--canopy', action='store_true', help="Enable global canopy height filter (for CONUS)")
+    canopy_filter_choices = ['ground', 'water', 'snow_ice', 'water+snow_ice', 'none']
+    parser.add_argument('--canopy_filter', type=str, default='ground', choices=canopy_filter_choices, help='Preserve these canopy height pixels (default: %(default)s)') 
     parser.add_argument('--dilate', type=int, default=None, help='Dilate mask with this many iterations (default: %(default)s)')
+    parser.add_argument('--dem_dt', type=str, default=None, help='Manually input DEM datetime as YYYYMMDD')
     return parser
 
 def main():
@@ -600,6 +681,7 @@ def main():
     if args.bareground: mask_list.append('bareground') 
     if args.glaciers: mask_list.append('glaciers') 
     if args.nlcd: mask_list.append('nlcd') 
+    if args.canopy: mask_list.append('canopy') 
 
     if not mask_list:
         parser.print_help()
@@ -638,12 +720,16 @@ def main():
     min_validpx_count = 100
     min_validpx_std = 10
     validpx_count = newdem.count()
-    validpx_std = newdem.std()
+    # validpx_std = newdem.std()
+    validpx_std = np.nanstd(newdem) #.std()
     print("%i valid pixels in masked output tif to be used as ref" % validpx_count)
     print("%0.2f std in masked output tif to be used as ref" % validpx_std)
     #if (validpx_count > min_validpx_count) and (validpx_std > min_validpx_std):
     if (validpx_count > min_validpx_count):
-        out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+'_ref.tif')
+        if args.modscag: 
+            out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+f'_{args.modscag_thresh}thresh_ref.tif')
+        else:
+            out_fn = os.path.join(args.outdir, os.path.splitext(os.path.split(dem_fn)[-1])[0]+'_ref.tif')
         print("Writing out %s" % out_fn)
         iolib.writeGTiff(newdem, out_fn, src_ds=dem_ds)
     else:
