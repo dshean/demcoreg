@@ -5,17 +5,67 @@
 #Should be better than global bareground data for identifying exposed rock surfaces
 
 # Usage:
-# ./get_nlcd.sh year
+# ./get_nlcd.sh [ region ] [ year ] [ ouput dat directory]
+
+###################################################################################################
+# Help
+Help()
+{
+   # Display Help
+   echo "Script downloader for NLCD 30 m products from"
+   echo "https://www.mrlc.gov/data"
+   echo
+   echo "Usage:"
+   echo "./get_nlcd.sh [ REGIONCODE ] [ year ] [ output data directory ]"
+   echo
+   echo "Defaults"
+   echo "       region      CONUS (Conterminous US)"
+   echo "       yr          2019"
+   echo "       datadir     $HOME/data/"
+   echo
+   echo "Available regions"
+   echo "       CONUS:        Lower 48 US states"
+   echo "       AK:           Alaska"
+   echo 
+   echo "options:"
+   echo "h     Print this Help."
+   echo
+}
+###################################################################################################
+
+# Get the options
+while getopts ":h" option; do
+   case $option in
+      h) # display Help
+         Help
+         exit;;
+   esac
+done
+
+###################################################################################################
 
 set -e
 
-# Input year
-yr=$1
+echo ; echo Running: $0 $@ ; echo
+# Input region
+region=$1
+yr=$2
+DATADIR=$3
 
-# Default is 2016
+# Default is CONUS
+if [ -z "$region" ] ; then
+    echo "Using default region: 'CONUS'"
+    region=CONUS
+else
+    echo "Using input region: $region"
+fi
+
+# Default is 2019
 if [ -z "$yr" ] ; then
-    echo "Using default NLCD year 2016"
-    yr=2016
+    echo "Using default NLCD year 2016" ; echo
+    yr=2019
+else
+    echo "Using input year: $yr" ; echo
 fi
 
 gdal_opt="-co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES"
@@ -30,13 +80,21 @@ fi
 
 cd $DATADIR
 
-#CONUS Land Cover (NLCD) grids, 30 m from https://www.mrlc.gov/data
-url="https://s3-us-west-2.amazonaws.com/mrlc/nlcd_${yr}_land_cover_l48_20210604.zip"
-nlcd_zip_fn="nlcd_${yr}_land_cover_l48_20210604.zip"
-nlcd_fn="nlcd_${yr}_land_cover_l48_20210604.tif"
+if [ $region == "CONUS" ] ; then
+    #CONUS Land Cover (NLCD) grids, 30 m from https://www.mrlc.gov/data
+    url="https://s3-us-west-2.amazonaws.com/mrlc/nlcd_${yr}_land_cover_l48_20210604.zip"
+elif [ $region == "AK" ] ; then
+    #AK Land Cover (NLCD) grids, 30 m from https://www.mrlc.gov/data
+    url="https://s3-us-west-2.amazonaws.com/mrlc/NLCD_${yr}_Land_Cover_AK_20200724.zip"
+else
+    echo "Region code not recognized: ${region}. Please enter 'CONUS' or 'AK'"
+fi
+
+nlcd_zip_fn=$(basename ${url})
+nlcd_fn="${nlcd_zip_fn%.*}.tif"
 nlcd_dir=${nlcd_zip_fn%.*}
 
-if [ ! -e $nlcd_zip_fn ] ; then
+if [[ ! -f $nlcd_zip_fn && ! -f $nlcd_fn ]] ; then
     echo "Downloading $nlcd_zip_fn"
     wget -O $nlcd_zip_fn $url
 fi
