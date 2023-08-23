@@ -253,12 +253,40 @@ def main(argv=None):
     src_dem_ds = gdal.Open(src_dem_fn)
     ref_dem_ds = gdal.Open(ref_dem_fn)
 
-    #Get local cartesian coordinate system
+    #Define local cartesian coordinate system  
+    #Should compute equidistant projection based on clon,clat and extent
     #local_srs = geolib.localtmerc_ds(src_dem_ds)
+
     #Use original source dataset coordinate system
-    #Potentially issues with distortion and xyz/tiltcorr offsets for DEM with large extent
-    local_srs = geolib.get_ds_srs(src_dem_ds)
-    #local_srs = geolib.get_ds_srs(ref_dem_ds)
+    #Potentially issues with distortion and xyz/tiltcorr offsets for DEMs with large extent
+    src_dem_srs = geolib.get_ds_srs(src_dem_ds)
+    ref_dem_srs = geolib.get_ds_srs(ref_dem_ds)
+    local_srs = src_dem_srs
+    #local_srs = ref_dem_srs 
+
+    #Check that inputs are projected CRS with units of meters
+    #In principle, this should only be required for the src_dem (local_srs above), as the ref_dem will be reprojected to match
+    #In practice, sometimes the intersection can fail for small extents, so best to reproject both
+    if not src_dem_srs.IsProjected() or not ref_dem_srs.IsProjected():
+        #New function added to geolib 8/22/23
+        #epsg = geolib.getUTMepsg(geolib.ds_geom(src_dem_ds))
+        #Copied here to avoid version issues
+        utm = geolib.getUTMzone(geolib.ds_geom(src_dem_ds))
+        prefix = '326'
+        if utm[-1] == 'S':
+            prefix = '327'
+        epsg = prefix+utm[0:2]
+
+        print(f"{ref_dem_fn} CRS: '{ref_dem_srs.ExportToProj4()}'")
+        print(f"{src_dem_fn} CRS: '{src_dem_srs.ExportToProj4()}'\n")
+
+        print(f"Input DEMs must have projected CRS with linear units of meters (not WGS84 geographic, units of degrees)") 
+        print(f"For relatively limited DEM extents (<100-300 km), you can consider reprojecting using the appropriate UTM projection:")
+        print(f"gdalwarp -r cubic -t_srs EPSG:{epsg} {src_dem_fn} {os.path.splitext(src_dem_fn)[0]+'_proj.tif'}")
+        print("For larger DEM extents, consider a custom equidistant projection: https://projectionwizard.org/")
+        print(f"Then rerun the dem_align.py command with the projected DEM(s)\n")
+
+        sys.exit()
 
     #Resample to common grid
     ref_dem_res = float(geolib.get_res(ref_dem_ds, t_srs=local_srs, square=True)[0])
