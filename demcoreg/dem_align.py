@@ -545,7 +545,7 @@ def main(argv=None):
         align_stats['res']['coreg'] = res
         align_stats['center_coord'] = {'lon':center_coord_ll[0], 'lat':center_coord_ll[1], \
                 'x':center_coord_xy[0], 'y':center_coord_xy[1]}
-        align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':dz_total, 'dm':dm_total}
+        align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':np.float64(dz_total), 'dm':dm_total}
         #This tiltcorr flag gets set to false, need better flag
         if tiltcorr:
             align_stats['tiltcorr'] = {}
