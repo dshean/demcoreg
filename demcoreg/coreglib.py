@@ -151,8 +151,8 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
     #ref_noise = ref.mask * ref.std() * np.random.rand(*ref.shape) + ref.mean()
     #kernel_noise = kernel.mask * kernel.std() * np.random.rand(*kernel.shape) + kernel.mean()
     #This provides noise in proper range, but noise propagates to m, peak is in different locations!
-    #ref_noise = ref.mask * (ref.min() + ref.ptp() * np.random.rand(*ref.shape))
-    #kernel_noise = kernel.mask * (kernel.min() + kernel.ptp() * np.random.rand(*kernel.shape))
+    #ref_noise = ref.mask * (ref.min() + np.ptp(ref) * np.random.rand(*ref.shape))
+    #kernel_noise = kernel.mask * (kernel.min() + np.ptp(kernel) * np.random.rand(*kernel.shape))
 
     #This provides a proper normal distribution with mean=0 and std=1
     ref_noise = ref.mask * (np.random.randn(*ref.shape))
@@ -294,7 +294,7 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
     
     #Not going to help if we have a step function between two plateaus, but better than nothing
     #Calculate bin aspect spread
-    bin_ptp = np.cos(np.radians(bin_centers)).ptp()
+    bin_ptp = np.ptp(np.cos(np.radians(bin_centers)))
     min_bin_ptp = 1.0 
 
     #Should iterate here, if not enough bins, increase bin width
