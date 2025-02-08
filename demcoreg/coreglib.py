@@ -631,25 +631,28 @@ def plot_ct_at_dh_fits(f, ct_med, ct_smooth, at_med, at_smooth, clim_dh=None):
         
     """
     ax1 = plt.subplot(1,2,1)
-    ax1.plot(ct_med, np.arange(len(ct_med)), c='k', label='median correction')
-    ax1.plot(ct_smooth, np.arange(len(ct_med)), c='r', label='smooth Sav-Golay fit')
-    ax1.set_title('Row-wise correction')
+    ax1.plot(ct_med, np.arange(len(ct_med)), c='k', lw=0.5, label='median')
+    ax1.plot(ct_smooth, np.arange(len(ct_med)), c='r', lw=0.5, label='S-G filter')
+    ax1.set_title('Row median elevation difference')
     ax1.set_xlabel('Elevation difference (m)')
-    ax1.axvline(x=0, ls='--', alpha=0.6, c='teal')
+    ax1.axvline(x=0, lw=0.75, c='k')
     ax1.set_ylabel('Row number')
-    ax1.legend()
+    ax1.invert_yaxis()
+    ax1.grid()
+    #ax1.legend()
     
     ax2 = plt.subplot(1,2,2)
-    ax2.plot(np.arange(len(at_med)), at_med, c='k', label='median correction')
-    ax2.plot(np.arange(len(at_med)), at_smooth, c='r', label='smooth Sav-Golay fit')
-    ax2.axhline(y=0, ls='--', alpha=0.6, c='teal')
-    ax2.set_title('Column-wise correction')
+    ax2.plot(np.arange(len(at_med)), at_med, c='k', lw=0.5, label='median')
+    ax2.plot(np.arange(len(at_med)), at_smooth, c='r', lw=0.5, label='S-G filter')
+    ax2.axhline(y=0, lw=0.75, c='k')
+    ax2.set_title('Column median elevation difference')
     ax2.set_ylabel('Elevation difference (m)')
-    ax2.set_xlabel('Col number')
+    ax2.set_xlabel('Column number')
+    ax2.grid()
     ax2.legend()
     # make row col aspect equal
-    xlim2 = ax1.get_ylim()
-    ax2.set_xlim(xlim2)
+    #xlim2 = ax1.get_ylim()
+    #ax2.set_xlim(xlim2)
     
     # if yes, this will make elevation difference aspect equal
     if clim_dh is not None:
