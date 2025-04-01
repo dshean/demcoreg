@@ -35,7 +35,9 @@ def getparser():
     parser = argparse.ArgumentParser(description="Apply existing pc_align translation to a DEM")
     parser.add_argument('dem_fn', type=str, help='DEM filename')
     parser.add_argument('log_fn', type=str, help='pc_align log filename')
+    parser.add_argument('-inverse_transform', action="store_true", help='select this option if inverse transform is desired')
     parser.add_argument('-outdir', default=None, help='Output directory')
+    parser.add_argument('-no_dz', action="store_true", help='only apply horizontal shift, useful for triangulation error maps and orthoimages')
     return parser
 
 def main():
@@ -140,7 +142,14 @@ def main():
 
     #out_fmt = "VRT"
     out_fmt = "TIF"
-    out_fn = os.path.join(outdir, os.path.split(os.path.splitext(dem_fn)[0])[1] + '_trans')
+    if args.inverse_transform:
+        proj_shift = -proj_shift
+        print("Since inverse transform is desired, actual proj_shift to be applied is: ", proj_shift)
+    if args.no_dz:
+      shift_str = "dx%+0.2fm_dy%+0.2fm_dz%+0.2fm" % (proj_shift[0], proj_shift[1], 0)
+    else:  
+        shift_str = "dx%+0.2fm_dy%+0.2fm_dz%+0.2fm" % (proj_shift[0], proj_shift[1], proj_shift[2])
+    out_fn = os.path.splitext(dem_fn)[0] + f'_trans_{shift_str}'
     if out_fmt == "VRT": 
         print("Writing vrt with scaled values")
         dst_fn = out_fn+'.vrt'
@@ -152,10 +161,14 @@ def main():
         print("Copying input dataset")
         dst_ds = iolib.gtif_drv.CreateCopy(dst_fn, src_ds, 0, options=iolib.gdal_opt)
         #Apply vertical shift
-        dst_b = dst_ds.GetRasterBand(1)
-        print("Writing out z-shifted band")
-        dst_b.SetNoDataValue(float(src_ndv))
-        dst_b.WriteArray(np.around((src_a + proj_shift[2]).filled(src_ndv), decimals=3))
+        if not args.no_dz:
+            print("Will apply a vertical shift to the input raster")
+            dst_b = dst_ds.GetRasterBand(1)
+            print("Writing out z-shifted band")
+            dst_b.SetNoDataValue(float(src_ndv))
+            dst_b.WriteArray(np.around((src_a + proj_shift[2]).filled(src_ndv), decimals=3))
+        else:
+            print("User selected not to apply vertical shift, only applying horizontal shifts to raster")
 
     dst_gt = list(dst_ds.GetGeoTransform())
     #Apply horizontal shift directly to geotransform
