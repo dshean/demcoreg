@@ -313,7 +313,7 @@ def main(argv=None):
     #Now iteratively update geotransform and vertical shift
     while True:
         print("*** Iteration %i ***" % n)
-        dx, dy, dz, static_mask, fig = compute_offset(ref_dem_ds, src_dem_ds_align, src_dem_fn, mode, max_offset, \
+        dx, dy, dz, static_mask, fig = compute_offset(ref_dem_ds, src_dem_ds_align, src_dem_fn, mode, max_offset = max_offset, \
                 mask_list=mask_list, max_dz=max_dz, slope_lim=slope_lim, plot=True)
         xyz_shift_str_iter = "dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx, dy, dz)
         print("Incremental offset: %s" % xyz_shift_str_iter)
