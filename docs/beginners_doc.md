@@ -10,7 +10,7 @@ The demcoreg README.md provides a basic overview of installation and usage for u
 1. Install conda. Managing python packages is best done using conda. You can download miniconda for your OS/architecture here: https://docs.conda.io/en/latest/miniconda.html
 2. Open a terminal/shell
 3. Create and activate a Python environment called demcoreg_env with necessary packages installed:
-  - Run this command to create an environment: `conda create -c conda-forge -n demcoreg_env python gdal rasterio geopandas` 
+  - Run this command to create an environment: `conda create -c conda-forge -n demcoreg_env python gdal rasterio geopandas requests matplotlib` 
   - After this completes, the new environment must be "activated". You can do this with: `conda activate demcoreg_env`
     - *Note: you will need to activate each time you start a new terminal session*
 4. Prepare to install software from github (this needs to be done only once)
