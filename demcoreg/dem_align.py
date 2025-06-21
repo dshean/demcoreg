@@ -36,7 +36,7 @@ def outlier_filter(diff, f=3, perc=None, max_dz=100):
 
     print("Absolute dz filter: %0.2f" % max_dz)
     #Absolute dz filter
-    diff = np.ma.masked_greater(diff, max_dz)
+    diff = np.ma.masked_outside(diff, -max_dz, max_dz)
     print(diff.count())
 
     if perc is not None:
