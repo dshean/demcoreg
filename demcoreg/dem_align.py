@@ -335,6 +335,7 @@ def main(argv=None):
                 print("Writing offset plot: %s" % dst_fn)
                 fig.gca().set_title("Incremental: %s\nCumulative: %s" % (xyz_shift_str_iter, xyz_shift_str_cum))
                 fig.savefig(dst_fn, dpi=300)
+                plt.close(fig)
 
         #Apply the horizontal shift to the original dataset
         src_dem_ds_align = coreglib.apply_xy_shift(src_dem_ds_align, dx, dy, createcopy=False)
@@ -360,6 +361,7 @@ def main(argv=None):
                 print("Writing offset plot: %s" % dst_fn)
                 fig.gca().set_title("Incremental:%s\nCumulative:%s" % (xyz_shift_str_iter, xyz_shift_str_cum))
                 fig.savefig(dst_fn, dpi=300)
+                plt.close(fig)
 
             #Compute final elevation difference
             if True:
@@ -421,7 +423,7 @@ def main(argv=None):
 
                 if True:
                     print("Creating plot of polynomial fit to residuals")
-                    fig, axa = plt.subplots(1,2, figsize=(8, 4))
+                    fig_polyfit, axa = plt.subplots(1,2, figsize=(8, 4))
                     dz_clim = malib.calcperc_sym(vals, (2, 98))
                     ax = pltlib.iv(diff_align_filt, ax=axa[0], cmap='RdBu', clim=dz_clim, \
                             label='Residual dz (m)', scalebar=False)
@@ -431,7 +433,8 @@ def main(argv=None):
                         #xyz_shift_str_cum_fn += "_tiltcorr"
                     tiltcorr_fig_fn = outprefix + '%s_polyfit.png' % xyz_shift_str_cum_fn
                     print("Writing out figure: %s\n" % tiltcorr_fig_fn)
-                    fig.savefig(tiltcorr_fig_fn, dpi=300)
+                    fig_polyfit.savefig(tiltcorr_fig_fn, dpi=300)
+                    plt.close(fig_polyfit)
 
                 print("Applying tilt correction to difference map")
                 diff_align -= vals
@@ -564,8 +567,7 @@ def main(argv=None):
     if True:
         print("Creating final plot")
         kwargs = {'interpolation':'none'}
-        #f, axa = plt.subplots(2, 4, figsize=(11, 8.5))
-        f, axa = plt.subplots(2, 4, figsize=(16, 8))
+        fig_final, axa = plt.subplots(2, 4, figsize=(16, 8))
         for ax in axa.ravel()[:-1]:
             ax.set_facecolor('k')
             pltlib.hide_ticks(ax)
@@ -600,7 +602,7 @@ def main(argv=None):
 
         #Tried to insert Nuth fig here
         #ax_nuth.change_geometry(1,2,1)
-        #f.axes.append(ax_nuth)
+        #fig_final.axes.append(ax_nuth)
 
         bins = np.linspace(dz_clim[0], dz_clim[1], 128)
         axa[1,3].hist(diff_orig_compressed, bins, color='g', label='Before', alpha=0.5)
@@ -619,13 +621,14 @@ def main(argv=None):
         axa[0,3].axis('off')
 
         suptitle = '%s\nx: %+0.2fm, y: %+0.2fm, z: %+0.2fm' % (os.path.split(outprefix)[-1], dx_total, dy_total, dz_total)
-        f.suptitle(suptitle)
-        f.tight_layout()
+        fig_final.suptitle(suptitle)
+        fig_final.tight_layout()
         plt.subplots_adjust(top=0.90)
 
         fig_fn = outprefix + '%s_align.png' % xyz_shift_str_cum_fn
         print("Writing out figure: %s" % fig_fn)
-        f.savefig(fig_fn, dpi=300)
+        fig_final.savefig(fig_fn, dpi=300)
+        plt.close(fig_final)
 
 if __name__ == "__main__":
     main()
