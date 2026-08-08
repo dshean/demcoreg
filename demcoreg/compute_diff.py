@@ -15,7 +15,7 @@ import numpy as np
 from pygeotools.lib import timelib, iolib, malib, warplib
 
 def getparser():
-    parser = argparse.ArgumentParser(description="Compute difference between two rasters")
+    parser = argparse.ArgumentParser(description="Compute difference between two rasters (fn2 - fn1)")
     parser.add_argument('-outdir', default=None, help='Output directory')
     parser.add_argument('-tr', default='max', help='Output resolution (default: %(default)s)')
     parser.add_argument('-te', default='intersection', help='Output extent (default: %(default)s)')
@@ -103,7 +103,7 @@ def main():
     r2 = iolib.ds_getma(r2_ds, 1)
 
     #Compute relative difference 
-    print("Computing raster difference")
+    print("Computing raster difference (r2 - r1)")
     diff = r2 - r1
 
     #Check to make sure inputs actually intersect
