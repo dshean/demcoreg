@@ -573,7 +573,7 @@ def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_
         med_second_smooth = scipy.signal.savgol_filter(med_second, window_length=sg_window, polyorder=sg_poly, mode='nearest')
         second_correction_surface = np.expand_dims(med_second_smooth, axis=second_axis)
     else:
-        second_correction_surface = np.expand_dims(med_second_smooth, axis=second_axis)
+        second_correction_surface = np.expand_dims(med_second, axis=second_axis)
 
     # correct the array along the second axis 
     b = b - second_correction_surface
