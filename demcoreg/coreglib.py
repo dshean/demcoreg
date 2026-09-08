@@ -487,7 +487,7 @@ def find_subpixel_peak_position(corr, subpixel_method='gaussian'):
 ## functions for along-track cross-track correction and plotting
 
 #TO DO: add number of iterations as argument
-def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_window=101, sg_poly=2, min_axes_count=350):
+def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_window=101, sg_poly=2, min_axes_count=350, return_counts=False):
     """
     Subtract median values from each axis of the input difference map array
     Parameters
@@ -506,6 +506,8 @@ def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_
         polynomial order to be used in savgol filtering
     min_axes_count: int
         minimum number of filtered pixels in any given axes for that axes to contribute to stats computation
+    return_counts: bool
+        whether to also return the valid sample count along each axis (appended to the end of the output)
     Returns
     -----------
     b: np.ma.array
@@ -522,6 +524,10 @@ def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_
         smoothed first_axis corrections (optional, if sav_filter=True)
     med_second_smooth: np.array
         smoothed second_axis corrections (optional, if sav_filter=True)
+    count_first: np.array
+        valid sample count along first_axis (optional, if return_counts=True)
+    count_second: np.array
+        valid sample count along second_axis (optional, if return_counts=True; all zeros if first_axis_only=True)
     
     """
     import scipy.signal
@@ -580,9 +586,11 @@ def successive_med(a, first_axis=1, first_axis_only=False, sav_filter=False, sg_
     # correct the array along the second axis 
     b = b - second_correction_surface
 
-    out = [b, med_first, count_first, med_second, count_second, first_correction_surface, second_correction_surface]
+    out = [b, med_first, med_second, first_correction_surface, second_correction_surface]
     if sav_filter:
         out.extend([med_first_smooth, med_second_smooth])
+    if return_counts:
+        out.extend([count_first, count_second])
     return out
 
 def plot_ct_at_dh_map(ax, dh_init, clim_dh, ct_correction_surface, at_correction_surface, dh_final):
@@ -613,7 +621,7 @@ def plot_ct_at_dh_map(ax, dh_init, clim_dh, ct_correction_surface, at_correction
     pltlib.iv(dh_final, cmap='RdBu', clim=clim_dh, label='Elevation difference (m)', title='dh after', ax=ax[3])
     plt.tight_layout()
 
-def plot_ct_at_dh_fits(f, ct_med, ct_smooth, at_med, at_smooth, ct_count=None, at_count=None, clim_dh=None):
+def plot_ct_at_dh_fits(f, ct_med, ct_smooth, at_med, at_smooth, clim_dh=None):
     """
     Plot Across-track (Row-wise) and Along-track (Column-wise) correction fits
     Parameters
@@ -628,10 +636,6 @@ def plot_ct_at_dh_fits(f, ct_med, ct_smooth, at_med, at_smooth, ct_count=None, a
         median error per column (1, dh_map.shape[0])
     at_smooth:np.array
         Smooth fit to median error per-column computed using Sav-Golay fit
-    ct_count: np.array
-        valid sample count per-row (optional, currently unused)
-    at_count: np.array
-        valid sample count per-column (optional, currently unused)
     clim_dh: tuple
         symmetrical min/max values to limit correction fits
         
@@ -703,7 +707,7 @@ def ct_at_correction_wrapper(src_dem_fn, dh_fn, dh_filt_fn, ct_only=False, sg_wi
     clim_dh = malib.calcperc_sym(dh_filt, (5,95))
     # perform the correction
     print("Computing Across-track (Row-wise) and Along-track (Column-wise) correction")
-    dh_filt_corr, ct_med, ct_count, at_med, at_count, ct_correction_surface, at_correction_surface, ct_med_smooth, at_med_smooth = \
+    dh_filt_corr, ct_med, at_med, ct_correction_surface, at_correction_surface, ct_med_smooth, at_med_smooth = \
             successive_med(dh_filt, first_axis_only=ct_only, sav_filter=True, sg_window=sg_window, sg_poly=sg_poly, min_axes_count=min_axes_count)
 
     # prepare the plots
@@ -717,7 +721,7 @@ def ct_at_correction_wrapper(src_dem_fn, dh_fn, dh_filt_fn, ct_only=False, sg_wi
     out_lineplot_fig = os.path.splitext(dh_fn)[0] + '_ct_at_correction_fit.png'
     print(f"Creating Across-track (Row-wise) and Along-track (Column-wise) correction fits figure at {out_lineplot_fig}")
     fig = plt.figure(figsize=(8,4))
-    plot_ct_at_dh_fits(fig, ct_med, ct_med_smooth, at_med, at_med_smooth, ct_count=ct_count, at_count=at_count, clim_dh=clim_dh)
+    plot_ct_at_dh_fits(fig, ct_med, ct_med_smooth, at_med, at_med_smooth, clim_dh=clim_dh)
     fig.savefig(out_lineplot_fig, dpi=300, bbox_inches='tight', pad_inches=0.1)
     
     # Correct source DEM
