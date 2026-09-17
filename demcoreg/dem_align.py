@@ -350,8 +350,10 @@ def main(argv=None):
         dm = np.sqrt(dx**2 + dy**2 + dz**2)
         dm_total = np.sqrt(dx_total**2 + dy_total**2 + dz_total**2)
 
-        if dm_total > max_offset:
-            sys.exit("Total offset exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % max_offset)
+        #Note: max_offset is horizontal, so don't include dz here (issue #65)
+        dxy_total = np.sqrt(dx_total**2 + dy_total**2)
+        if dxy_total > max_offset:
+            sys.exit("Total horizontal offset (%0.2f m) exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % (dxy_total, max_offset))
 
         #Stop iteration
         if n > max_iter or dm < tol:
