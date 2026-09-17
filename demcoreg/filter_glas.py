@@ -17,8 +17,8 @@ from pygeotools.lib import geolib, iolib, malib, timelib
 
 import matplotlib.pyplot as plt
 
-from imview.lib import gmtColormap, pltlib
-cpt_rainbow = gmtColormap.get_rainbow()
+from demcoreg import pltlib
+cpt_rainbow = pltlib.cpt_rainbow
 
 site = 'hma'
 

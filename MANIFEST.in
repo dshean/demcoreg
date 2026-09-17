@@ -1,3 +1,4 @@
 include README.md
 include LICENSE
 include demcoreg/*.sh
+include demcoreg/rainbow.cpt

@@ -12,14 +12,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from pygeotools.lib import iolib, timelib, malib, geolib
-from imview.lib import pltlib
+from demcoreg import pltlib
 
 def makefig(dem, hs, anomaly, ds, title=None):
     f,axa = plt.subplots(2, figsize=(8,5))
     hs_clim = (1, 255)
     hs_im = axa[0].imshow(hs, vmin=hs_clim[0], vmax=hs_clim[1], cmap='gray')
     #dem_clim = (1600, 2100)
-    dem_im = axa[0].imshow(dem, vmin=dem_clim[0], vmax=dem_clim[1], cmap='cpt_rainbow', alpha=0.5)
+    dem_im = axa[0].imshow(dem, vmin=dem_clim[0], vmax=dem_clim[1], cmap=pltlib.cpt_rainbow, alpha=0.5)
     anomaly_clim = (-15, 15)
     anomaly_im = axa[1].imshow(anomaly, vmin=anomaly_clim[0], vmax=anomaly_clim[1], cmap='RdBu')
     pltlib.add_cbar(axa[0], dem_im, label='Elevation (m WGS84)')

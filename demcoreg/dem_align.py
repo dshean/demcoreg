@@ -18,7 +18,7 @@ from pygeotools.lib import iolib, malib, geolib, warplib, filtlib
 
 from demcoreg import coreglib, dem_mask
 
-from imview.lib import pltlib
+from demcoreg import pltlib
 
 #Turn off numpy multithreading
 #os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -575,12 +575,12 @@ def main(argv=None):
             pltlib.hide_ticks(ax)
         dem_clim = malib.calcperc(ref_dem_orig, (2,98))
         axa[0,0].imshow(ref_dem_hs, cmap='gray', **kwargs)
-        im = axa[0,0].imshow(ref_dem_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6, **kwargs)
+        im = axa[0,0].imshow(ref_dem_orig, cmap=pltlib.cpt_rainbow, clim=dem_clim, alpha=0.6, **kwargs)
         pltlib.add_cbar(axa[0,0], im, arr=ref_dem_orig, clim=dem_clim, label=None)
         pltlib.add_scalebar(axa[0,0], res=res)
         axa[0,0].set_title('Reference DEM')
         axa[0,1].imshow(src_dem_hs, cmap='gray', **kwargs)
-        im = axa[0,1].imshow(src_dem_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6, **kwargs)
+        im = axa[0,1].imshow(src_dem_orig, cmap=pltlib.cpt_rainbow, clim=dem_clim, alpha=0.6, **kwargs)
         pltlib.add_cbar(axa[0,1], im, arr=src_dem_orig, clim=dem_clim, label=None)
         axa[0,1].set_title('Source DEM')
         #axa[0,2].imshow(~static_mask_orig, clim=(0,1), cmap='gray')

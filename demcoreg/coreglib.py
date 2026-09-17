@@ -612,7 +612,7 @@ def plot_ct_at_dh_map(ax, dh_init, clim_dh, ct_correction_surface, at_correction
     dh_final: np.ma.array
         final dh map (after correction applied)
     """
-    from imview import pltlib
+    from demcoreg import pltlib
     pltlib.iv(dh_init, cmap='RdBu', clim=clim_dh, label='Elevation difference (m)', title='dh before', ax=ax[0])
     pltlib.add_scalebar(ax=ax[0], res=1)
     #across_track_clim = malib.calcperc_sym(ct_correction_surface,(2,98))
