@@ -203,10 +203,11 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
     """
     import scipy.optimize as optimization
 
+    #Common causes: limited overlap, masks that remove most pixels, or max_dz smaller than the true vertical offset
     if dh.count() < min_count:
-        sys.exit("Not enough dh samples")
+        sys.exit("Not enough dh samples (%i valid, need %i). Check overlap, -mask_list, -max_dz and -slope_lim" % (dh.count(), min_count))
     if slope.count() < min_count:
-        sys.exit("Not enough slope/aspect samples")
+        sys.exit("Not enough slope/aspect samples (%i valid, need %i). Check overlap, -mask_list and -slope_lim" % (slope.count(), min_count))
 
     #mean_dh = dh.mean()
     #mean_slope = slope.mean()

@@ -286,7 +286,7 @@ def main(argv=None):
         print("For larger DEM extents, consider a custom equidistant projection: https://projectionwizard.org/")
         print(f"Then rerun the dem_align.py command with the projected DEM(s)\n")
 
-        sys.exit()
+        sys.exit("Input DEMs must have projected CRS")
 
     #Resample to common grid
     ref_dem_res = float(geolib.get_res(ref_dem_ds, t_srs=local_srs, square=True)[0])
