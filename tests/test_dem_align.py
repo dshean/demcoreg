@@ -36,13 +36,13 @@ def make_dem(fn, xres=10., yres=10., size_m=4000., dx=0., dy=0., dz=0.):
 #dem_align reports the shift to apply to src, so expect the opposite sign
 planted = (13., -7., 2.5)
 
-def run_dem_align(tmp_path, mode, xres=10., yres=10.):
+def run_dem_align(tmp_path, mode, xres=10., yres=10., extra_args=[]):
     ref_fn = str(tmp_path / 'ref.tif')
     src_fn = str(tmp_path / 'src.tif')
     make_dem(ref_fn)
     make_dem(src_fn, xres=xres, yres=yres, dx=planted[0], dy=planted[1], dz=planted[2])
     outdir = str(tmp_path / 'out')
-    dem_align.main(['-mode', mode, '-mask_list', 'none', '-outdir', outdir, ref_fn, src_fn])
+    dem_align.main(['-mode', mode, '-mask_list', 'none', '-outdir', outdir] + extra_args + [ref_fn, src_fn])
     stats = json.load(open(glob.glob(os.path.join(outdir, '*_align_stats.json'))[0]))
     return stats['shift'], outdir, src_fn
 
@@ -61,6 +61,13 @@ def test_nuth_planted_shift(tmp_path, xres, yres):
 def test_ncc_planted_shift(tmp_path):
     #Parabolic sub-pixel peak, expect agreement to a fraction of a 10 m pixel
     shift, outdir, src_fn = run_dem_align(tmp_path, 'ncc')
+    assert shift['dx'] == pytest.approx(-planted[0], abs=1.)
+    assert shift['dy'] == pytest.approx(-planted[1], abs=1.)
+    assert shift['dz'] == pytest.approx(-planted[2], abs=0.1)
+
+def test_sad_planted_shift(tmp_path):
+    #Limit search window, sad evaluates every integer offset
+    shift, outdir, src_fn = run_dem_align(tmp_path, 'sad', extra_args=['-max_offset', '30'])
     assert shift['dx'] == pytest.approx(-planted[0], abs=1.)
     assert shift['dy'] == pytest.approx(-planted[1], abs=1.)
     assert shift['dz'] == pytest.approx(-planted[2], abs=0.1)
