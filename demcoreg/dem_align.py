@@ -150,6 +150,9 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
         fit_param, fig = coreglib.compute_offset_nuth(diff, slope, aspect, plot=plot)
         if fit_param is None:
             print("Failed to calculate horizontal shift")
+            #Return nan, so caller can record the failed fit
+            dx = np.nan
+            dy = np.nan
         else:
             #fit_param[0] is magnitude of shift vector
             #fit_param[1] is direction of shift vector
@@ -312,12 +315,19 @@ def main(argv=None):
     dx_total = 0
     dy_total = 0
     dz_total = 0
+    #Number of iterations where horizontal fit failed
+    n_fit_failed = 0
 
     #Now iteratively update geotransform and vertical shift
     while True:
         print("*** Iteration %i ***" % n)
         dx, dy, dz, static_mask, fig = compute_offset(ref_dem_ds, src_dem_ds_align, src_dem_fn, mode, max_offset = max_offset, \
                 mask_list=mask_list, max_dz=max_dz, slope_lim=slope_lim, plot=True)
+        if np.isnan(dx) or np.isnan(dy):
+            #Horizontal fit failed, apply vertical shift only
+            n_fit_failed += 1
+            dx = 0
+            dy = 0
         xyz_shift_str_iter = "dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx, dy, dz)
         print("Incremental offset: %s" % xyz_shift_str_iter)
 
@@ -557,7 +567,11 @@ def main(argv=None):
         align_stats['res']['coreg'] = res
         align_stats['center_coord'] = {'lon':center_coord_ll[0], 'lat':center_coord_ll[1], \
                 'x':center_coord_xy[0], 'y':center_coord_xy[1]}
-        align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':np.float64(dz_total), 'dm':dm_total}
+        #Note: cast to float, np.float32 is not JSON serializable
+        align_stats['shift'] = {'dx':float(dx_total), 'dy':float(dy_total), 'dz':float(dz_total), 'dm':float(dm_total)}
+        #Note: n is incremented after each iteration
+        align_stats['n_iter'] = n - 1
+        align_stats['n_fit_failed'] = n_fit_failed
         #This tiltcorr flag gets set to false, need better flag
         if tiltcorr:
             align_stats['tiltcorr'] = {}
@@ -638,6 +652,11 @@ def main(argv=None):
         print("Writing out figure: %s" % fig_fn)
         fig_final.savefig(fig_fn, dpi=300)
         plt.close(fig_final)
+
+    if n_fit_failed == n - 1:
+        print("\nWARNING: horizontal fit failed in all %i iterations, output has vertical shift only (dx=dy=0)" % n_fit_failed)
+    elif n_fit_failed > 0:
+        print("\nWARNING: horizontal fit failed in %i of %i iterations" % (n_fit_failed, n - 1))
 
 if __name__ == "__main__":
     main()
