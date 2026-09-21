@@ -131,16 +131,19 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
         #Geotransform has negative y resolution, so don't need negative sign
         #np array is positive down
         #GDAL coordinates are positive up
-        dx = sp_offset[1]*src_dem_gt[1]
-        dy = sp_offset[0]*src_dem_gt[5]
+        #Note: sp_offset is already the shift to apply to src, negate here as the return below negates
+        dx = -sp_offset[1]*src_dem_gt[1]
+        dy = -sp_offset[0]*src_dem_gt[5]
     #Normalized cross-correlation of clipped, overlapping areas
     elif mode == "ncc":
         ref_dem = np.ma.array(ref_dem, mask=static_mask)
         src_dem = np.ma.array(src_dem, mask=static_mask)
+        #Note: prefilter is needed here, correlation of unfiltered elevation values has no well-defined peak
         m, int_offset, sp_offset, fig = coreglib.compute_offset_ncc(ref_dem, src_dem, \
-                pad=pad, prefilter=False, plot=plot)
-        dx = sp_offset[1]*src_dem_gt[1]
-        dy = sp_offset[0]*src_dem_gt[5]
+                pad=pad, prefilter=True, plot=plot)
+        #Note: sp_offset is already the shift to apply to src, negate here as the return below negates
+        dx = -sp_offset[1]*src_dem_gt[1]
+        dy = -sp_offset[0]*src_dem_gt[5]
     #Nuth and Kaab (2011)
     elif mode == "nuth":
         #Compute relationship between elevation difference, slope and aspect
@@ -354,6 +357,10 @@ def main(argv=None):
         dxy_total = np.sqrt(dx_total**2 + dy_total**2)
         if dxy_total > max_offset:
             sys.exit("Total horizontal offset (%0.2f m) exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % (dxy_total, max_offset))
+
+        #Close intermediate figures that are not written out
+        if fig is not None and not (n > max_iter or dm < tol):
+            plt.close(fig)
 
         #Stop iteration
         if n > max_iter or dm < tol:
