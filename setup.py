@@ -1,13 +1,21 @@
 #!/usr/bin/env python
 
+import os
 import re
 from setuptools import setup
 
 #To prepare a new release, build from a clean archive and publish:
 #git archive --format=tar --prefix=demcoreg/ vX.Y.Z | tar -x -C /tmp && (cd /tmp/demcoreg && uv build && uv publish dist/*)
 
+here = os.path.dirname(os.path.abspath(__file__))
+#Single source for the version
+with open(os.path.join(here, 'demcoreg', '__init__.py')) as f:
+    version = re.search(r"__version__ = '(.*)'", f.read()).group(1)
+with open(os.path.join(here, 'README.md')) as f:
+    long_description = f.read()
+
 setup(name='demcoreg',
-    version=re.search(r"__version__ = '(.*)'", open('demcoreg/__init__.py').read()).group(1),
+    version=version,
     description='Utilities for DEM co-registration',
     author='David Shean',
     author_email='dshean@gmail.com',
@@ -15,7 +23,7 @@ setup(name='demcoreg',
     url='https://github.com/dshean/demcoreg',
     packages=['demcoreg'],
     package_data={'demcoreg': ['rainbow.cpt']},
-    long_description=open('README.md').read(),
+    long_description=long_description,
     long_description_content_type='text/markdown',
     python_requires='>=3.8',
     install_requires=['numpy','gdal','matplotlib>=3.6','matplotlib-scalebar','pygeotools>=1.1.3','wget'],

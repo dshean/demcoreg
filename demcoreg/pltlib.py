@@ -73,7 +73,7 @@ def iv(a, ax=None, clim=None, clim_perc=(2,98), cmap=cpt_rainbow, label=None, ti
             cm.set_bad(alpha=0)
             bg_clim_perc = (2,98)
             bg_clim = get_clim(hs, bg_clim_perc)
-            bgplot = ax.imshow(hs, cmap=b_cm, clim=bg_clim, **imshow_kwargs)
+            ax.imshow(hs, cmap=b_cm, clim=bg_clim, **imshow_kwargs)
             alpha = 0.5
     if scalebar:
         if ds is not None:
@@ -86,7 +86,7 @@ def iv(a, ax=None, clim=None, clim_perc=(2,98), cmap=cpt_rainbow, label=None, ti
             sb_loc = best_scalebar_location(a)
             add_scalebar(ax, res, location=sb_loc)
     imgplot = ax.imshow(a, cmap=cm, clim=clim, alpha=alpha, **imshow_kwargs)
-    cbar = add_cbar(ax, imgplot, label=label, arr=a, clim=clim)
+    add_cbar(ax, imgplot, label=label, arr=a, clim=clim)
     hide_ticks(ax)
     if title is not None:
         ax.set_title(title)

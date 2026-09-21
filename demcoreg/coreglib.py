@@ -115,7 +115,7 @@ def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
     return m, int_offset, sp_offset
 
 #This is a decent full-image normalized cross-correlation routine with sub-pixel refinement
-def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False, method='direct', fill='zero', seed=0): 
+def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False, method='direct', fill='zero', seed=0):
     """Compute horizontal offset between input rasters using normalized cross-correlation (NCC) method
 
     method: 'direct' (scipy.signal.correlate2d) or 'fft' (scipy.signal.correlate), same result, fft is faster for large inputs
@@ -131,8 +131,8 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False, metho
         import scipy.ndimage
         #Note: nodata is propagated by the filter, so valid area is reduced by ~4 px around each masked pixel
         #These pixels are masked and filled below
-        dem1 = malib.nanfill(dem1, scipy.ndimage.gaussian_laplace, sigma) 
-        dem2 = malib.nanfill(dem2, scipy.ndimage.gaussian_laplace, sigma) 
+        dem1 = malib.nanfill(dem1, scipy.ndimage.gaussian_laplace, sigma)
+        dem2 = malib.nanfill(dem2, scipy.ndimage.gaussian_laplace, sigma)
 
     import scipy.signal
     #Compute max offset given dem spatial resolution
@@ -165,8 +165,6 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False, metho
         m = scipy.signal.correlate(ref, kernel, 'valid', method='fft')
     else:
         m = scipy.signal.correlate2d(ref, kernel, 'valid')
-    #This has memory issues, but ndimage filters can handle nan
-    #m = scipy.ndimage.filters.correlate(ref, kernel)
    
     print("Computing sub-pixel peak")
     int_argmax = np.array(np.unravel_index(m.argmax(), m.shape))

@@ -60,14 +60,14 @@ def test_nuth_planted_shift(tmp_path, xres, yres):
 
 def test_ncc_planted_shift(tmp_path):
     #Parabolic sub-pixel peak, expect agreement to a fraction of a 10 m pixel
-    shift, outdir, src_fn = run_dem_align(tmp_path, 'ncc')
+    shift, _, _ = run_dem_align(tmp_path, 'ncc', extra_args=['-max_iter', '10'])
     assert shift['dx'] == pytest.approx(-planted[0], abs=1.)
     assert shift['dy'] == pytest.approx(-planted[1], abs=1.)
     assert shift['dz'] == pytest.approx(-planted[2], abs=0.1)
 
 def test_sad_planted_shift(tmp_path):
     #Limit search window, sad evaluates every integer offset
-    shift, outdir, src_fn = run_dem_align(tmp_path, 'sad', extra_args=['-max_offset', '30'])
+    shift, _, _ = run_dem_align(tmp_path, 'sad', extra_args=['-max_offset', '30'])
     assert shift['dx'] == pytest.approx(-planted[0], abs=1.)
     assert shift['dy'] == pytest.approx(-planted[1], abs=1.)
     assert shift['dz'] == pytest.approx(-planted[2], abs=0.1)
