@@ -208,7 +208,8 @@ def getparser():
 
 def main(argv=None):
     parser = getparser()
-    args = parser.parse_args()
+    #Note: argv should not include the program name
+    args = parser.parse_args(argv)
 
     #Should check that files exist
     ref_dem_fn = args.ref_fn
