@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
+import re
 from setuptools import setup
 
 #To prepare a new release, build from a clean archive and publish:
 #git archive --format=tar --prefix=demcoreg/ vX.Y.Z | tar -x -C /tmp && (cd /tmp/demcoreg && uv build && uv publish dist/*)
 
 setup(name='demcoreg',
-    version='1.1.3',
+    version=re.search(r"__version__ = '(.*)'", open('demcoreg/__init__.py').read()).group(1),
     description='Utilities for DEM co-registration',
     author='David Shean',
     author_email='dshean@gmail.com',

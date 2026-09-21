@@ -19,14 +19,12 @@ The demcoreg README.md provides a basic overview of installation and usage for u
 5. Clone github repositories:
   - `git clone https://github.com/dshean/pygeotools.git`
   - `git clone https://github.com/dshean/demcoreg.git`
-  - `git clone https://github.com/dshean/imview.git`
 6. Install these packages, so you can use them with your conda Python:
   - `pip install -e pygeotools/`
   - `pip install -e demcoreg/`
-  - `pip install -e imview/`
 7. In addition to Python modules, these packages also contain some command-line scripts.  While you can always run these scripts from the terminal using a full path (e.g., `~/src/demcoreg/demcoreg/dem_align.py`), it's convenient to run them using only `dem_align.py`. To accomplish this, you can add the directory to the `~/.bashrc` (or `~/.bash_profile`) file in your home directory.
   - To get the full path name `realpath demcoreg/demcoreg`
-  - Open `~/.bashrc` (or `~/.bash_profile`) in a text editor of your choice, and add this line to the end of the file: `export PATH="~/src/pygeotools/pygeotools:~/src/demcoreg/demcoreg:~/src/imview/imview:$PATH"`
+  - Open `~/.bashrc` (or `~/.bash_profile`) in a text editor of your choice, and add this line to the end of the file: `export PATH="~/src/pygeotools/pygeotools:~/src/demcoreg/demcoreg:$PATH"`
     - Navigate to your home directory using `cd ~`
     - Type `ls -al` in the command line to view a list of files (including hidden files) in the home directory 
     - Determine if you have `~/.bashrc` (or `~/.bash_profile`) 
@@ -49,7 +47,7 @@ usage: dem_align.py [-h] [-mode {ncc,sad,nuth,none}]
 ```
 
 ## Basic command-line usage
-- If the above sequence of commands are followed, you have all the command-line tools and python libraries in `demcoreg`, `pygeotools` and `imview` at your disposal (Look at their corresponding readmes for more details).
+- If the above sequence of commands are followed, you have all the command-line tools and python libraries in `demcoreg` and `pygeotools` at your disposal (Look at their corresponding readmes for more details).
 - `dem_align.py` is the workhorse here which can be used to align two rasters. This is probably the most desirable operation for new users who install this package for aligning/co-registering two DEMs. 
 - To align two DEMs named dem1.tif and dem2.tif, run the following command: `dem_align.py -mode nuth dem1.tif dem2.tif`  
 *Note: When run for the first time, demcoreg will download glacier polygons from the rgi website which might take some time.*
