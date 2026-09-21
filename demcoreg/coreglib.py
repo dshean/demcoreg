@@ -115,8 +115,13 @@ def compute_offset_sad(dem1, dem2, pad=(9,9), plot=False):
     return m, int_offset, sp_offset
 
 #This is a decent full-image normalized cross-correlation routine with sub-pixel refinement
-def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False): 
+def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False, method='direct', fill='zero', seed=0):
     """Compute horizontal offset between input rasters using normalized cross-correlation (NCC) method
+
+    method: 'direct' (scipy.signal.correlate2d) or 'fft' (scipy.signal.correlate), same result, fft is faster for large inputs
+    fill: value for masked pixels, 'zero' or 'noise' (N(0,1), seeded)
+    Inputs are normalized before the fill, so zero is the mean and contributes nothing to the correlation
+    Random noise fill is only needed for a locally-normalized correlation, preserved here as an option
     """
 
     #Apply edge detection filter up front - improves results when input DEMs are same resolution
@@ -124,10 +129,10 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
         print("Applying LoG edge-detection filter to DEMs")
         sigma = 1
         import scipy.ndimage
-        #Note, ndimage alone propagates Nans and greatly reduces valid data area
-        #Use the malib.nanfill wrapper to avoid this
-        dem1 = malib.nanfill(dem1, scipy.ndimage.filters.gaussian_laplace, sigma) 
-        dem2 = malib.nanfill(dem2, scipy.ndimage.filters.gaussian_laplace, sigma) 
+        #Note: nodata is propagated by the filter, so valid area is reduced by ~4 px around each masked pixel
+        #These pixels are masked and filled below
+        dem1 = malib.nanfill(dem1, scipy.ndimage.gaussian_laplace, sigma)
+        dem2 = malib.nanfill(dem2, scipy.ndimage.gaussian_laplace, sigma)
 
     import scipy.signal
     #Compute max offset given dem spatial resolution
@@ -145,26 +150,21 @@ def compute_offset_ncc(dem1, dem2, pad=(9,9), prefilter=False, plot=False):
 
     #Consider using astropy.convolve here instead of scipy.correlate?
 
-    print("Adding random noise to masked regions")
-    #Generate random noise to fill gaps before correlation in frequency domain
-    #Normal distribution N(mean, std^2)
-    #ref_noise = ref.mask * ref.std() * np.random.rand(*ref.shape) + ref.mean()
-    #kernel_noise = kernel.mask * kernel.std() * np.random.rand(*kernel.shape) + kernel.mean()
-    #This provides noise in proper range, but noise propagates to m, peak is in different locations!
-    #ref_noise = ref.mask * (ref.min() + np.ptp(ref) * np.random.rand(*ref.shape))
-    #kernel_noise = kernel.mask * (kernel.min() + np.ptp(kernel) * np.random.rand(*kernel.shape))
+    if fill == 'noise':
+        print("Adding random noise to masked regions")
+        #Normal distribution with mean=0 and std=1, fixed seed by default so output is reproducible
+        rng = np.random.default_rng(seed)
+        ref = ref.filled(0) + ref.mask * rng.standard_normal(ref.shape)
+        kernel = kernel.filled(0) + kernel.mask * rng.standard_normal(kernel.shape)
+    else:
+        ref = ref.filled(0)
+        kernel = kernel.filled(0)
 
-    #This provides a proper normal distribution with mean=0 and std=1
-    ref_noise = ref.mask * (np.random.randn(*ref.shape))
-    kernel_noise = kernel.mask * (np.random.randn(*kernel.shape))
-    #Add the noise
-    ref = ref.filled(0) + ref_noise
-    kernel = kernel.filled(0) + kernel_noise
-
-    print("Running 2D correlation with search window (x,y): %i, %i" % (pad[1], pad[0]))
-    m = scipy.signal.correlate2d(ref, kernel, 'valid')
-    #This has memory issues, but ndimage filters can handle nan
-    #m = scipy.ndimage.filters.correlate(ref, kernel)
+    print("Running 2D correlation (%s) with search window (x,y): %i, %i" % (method, pad[1], pad[0]))
+    if method == 'fft':
+        m = scipy.signal.correlate(ref, kernel, 'valid', method='fft')
+    else:
+        m = scipy.signal.correlate2d(ref, kernel, 'valid')
    
     print("Computing sub-pixel peak")
     int_argmax = np.array(np.unravel_index(m.argmax(), m.shape))
@@ -203,10 +203,11 @@ def compute_offset_nuth(dh, slope, aspect, min_count=100, remove_outliers=True, 
     """
     import scipy.optimize as optimization
 
+    #Common causes: limited overlap, masks that remove most pixels, or max_dz smaller than the true vertical offset
     if dh.count() < min_count:
-        sys.exit("Not enough dh samples")
+        sys.exit("Not enough dh samples (%i valid, need %i). Check overlap, -mask_list, -max_dz and -slope_lim" % (dh.count(), min_count))
     if slope.count() < min_count:
-        sys.exit("Not enough slope/aspect samples")
+        sys.exit("Not enough slope/aspect samples (%i valid, need %i). Check overlap, -mask_list and -slope_lim" % (slope.count(), min_count))
 
     #mean_dh = dh.mean()
     #mean_slope = slope.mean()
@@ -611,7 +612,7 @@ def plot_ct_at_dh_map(ax, dh_init, clim_dh, ct_correction_surface, at_correction
     dh_final: np.ma.array
         final dh map (after correction applied)
     """
-    from imview import pltlib
+    from demcoreg import pltlib
     pltlib.iv(dh_init, cmap='RdBu', clim=clim_dh, label='Elevation difference (m)', title='dh before', ax=ax[0])
     pltlib.add_scalebar(ax=ax[0], res=1)
     #across_track_clim = malib.calcperc_sym(ct_correction_surface,(2,98))

@@ -18,7 +18,7 @@ from pygeotools.lib import iolib, malib, geolib, warplib, filtlib
 
 from demcoreg import coreglib, dem_mask
 
-from imview.lib import pltlib
+from demcoreg import pltlib
 
 #Turn off numpy multithreading
 #os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -131,22 +131,28 @@ def compute_offset(ref_dem_ds, src_dem_ds, src_dem_fn, mode='nuth', remove_outli
         #Geotransform has negative y resolution, so don't need negative sign
         #np array is positive down
         #GDAL coordinates are positive up
-        dx = sp_offset[1]*src_dem_gt[1]
-        dy = sp_offset[0]*src_dem_gt[5]
+        #Note: sp_offset is already the shift to apply to src, negate here as the return below negates
+        dx = -sp_offset[1]*src_dem_gt[1]
+        dy = -sp_offset[0]*src_dem_gt[5]
     #Normalized cross-correlation of clipped, overlapping areas
     elif mode == "ncc":
         ref_dem = np.ma.array(ref_dem, mask=static_mask)
         src_dem = np.ma.array(src_dem, mask=static_mask)
+        #Note: prefilter is needed here, correlation of unfiltered elevation values has no well-defined peak
         m, int_offset, sp_offset, fig = coreglib.compute_offset_ncc(ref_dem, src_dem, \
-                pad=pad, prefilter=False, plot=plot)
-        dx = sp_offset[1]*src_dem_gt[1]
-        dy = sp_offset[0]*src_dem_gt[5]
+                pad=pad, prefilter=True, plot=plot)
+        #Note: sp_offset is already the shift to apply to src, negate here as the return below negates
+        dx = -sp_offset[1]*src_dem_gt[1]
+        dy = -sp_offset[0]*src_dem_gt[5]
     #Nuth and Kaab (2011)
     elif mode == "nuth":
         #Compute relationship between elevation difference, slope and aspect
         fit_param, fig = coreglib.compute_offset_nuth(diff, slope, aspect, plot=plot)
         if fit_param is None:
             print("Failed to calculate horizontal shift")
+            #Return nan, so caller can record the failed fit
+            dx = np.nan
+            dy = np.nan
         else:
             #fit_param[0] is magnitude of shift vector
             #fit_param[1] is direction of shift vector
@@ -202,7 +208,8 @@ def getparser():
 
 def main(argv=None):
     parser = getparser()
-    args = parser.parse_args()
+    #Note: argv should not include the program name
+    args = parser.parse_args(argv)
 
     #Should check that files exist
     ref_dem_fn = args.ref_fn
@@ -286,7 +293,7 @@ def main(argv=None):
         print("For larger DEM extents, consider a custom equidistant projection: https://projectionwizard.org/")
         print(f"Then rerun the dem_align.py command with the projected DEM(s)\n")
 
-        sys.exit()
+        sys.exit("Input DEMs must have projected CRS")
 
     #Resample to common grid
     ref_dem_res = float(geolib.get_res(ref_dem_ds, t_srs=local_srs, square=True)[0])
@@ -309,12 +316,19 @@ def main(argv=None):
     dx_total = 0
     dy_total = 0
     dz_total = 0
+    #Number of iterations where horizontal fit failed
+    n_fit_failed = 0
 
     #Now iteratively update geotransform and vertical shift
     while True:
         print("*** Iteration %i ***" % n)
         dx, dy, dz, static_mask, fig = compute_offset(ref_dem_ds, src_dem_ds_align, src_dem_fn, mode, max_offset = max_offset, \
                 mask_list=mask_list, max_dz=max_dz, slope_lim=slope_lim, plot=True)
+        if np.isnan(dx) or np.isnan(dy):
+            #Horizontal fit failed, apply vertical shift only
+            n_fit_failed += 1
+            dx = 0
+            dy = 0
         xyz_shift_str_iter = "dx=%+0.2fm, dy=%+0.2fm, dz=%+0.2fm" % (dx, dy, dz)
         print("Incremental offset: %s" % xyz_shift_str_iter)
 
@@ -350,8 +364,14 @@ def main(argv=None):
         dm = np.sqrt(dx**2 + dy**2 + dz**2)
         dm_total = np.sqrt(dx_total**2 + dy_total**2 + dz_total**2)
 
-        if dm_total > max_offset:
-            sys.exit("Total offset exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % max_offset)
+        #Note: max_offset is horizontal, so don't include dz here (issue #65)
+        dxy_total = np.sqrt(dx_total**2 + dy_total**2)
+        if dxy_total > max_offset:
+            sys.exit("Total horizontal offset (%0.2f m) exceeded specified max_offset (%0.2f m). Consider increasing -max_offset argument" % (dxy_total, max_offset))
+
+        #Close intermediate figures that are not written out
+        if fig is not None and not (n > max_iter or dm < tol):
+            plt.close(fig)
 
         #Stop iteration
         if n > max_iter or dm < tol:
@@ -548,7 +568,11 @@ def main(argv=None):
         align_stats['res']['coreg'] = res
         align_stats['center_coord'] = {'lon':center_coord_ll[0], 'lat':center_coord_ll[1], \
                 'x':center_coord_xy[0], 'y':center_coord_xy[1]}
-        align_stats['shift'] = {'dx':dx_total, 'dy':dy_total, 'dz':np.float64(dz_total), 'dm':dm_total}
+        #Note: cast to float, np.float32 is not JSON serializable
+        align_stats['shift'] = {'dx':float(dx_total), 'dy':float(dy_total), 'dz':float(dz_total), 'dm':float(dm_total)}
+        #Note: n is incremented after each iteration
+        align_stats['n_iter'] = n - 1
+        align_stats['n_fit_failed'] = n_fit_failed
         #This tiltcorr flag gets set to false, need better flag
         if tiltcorr:
             align_stats['tiltcorr'] = {}
@@ -573,12 +597,12 @@ def main(argv=None):
             pltlib.hide_ticks(ax)
         dem_clim = malib.calcperc(ref_dem_orig, (2,98))
         axa[0,0].imshow(ref_dem_hs, cmap='gray', **kwargs)
-        im = axa[0,0].imshow(ref_dem_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6, **kwargs)
+        im = axa[0,0].imshow(ref_dem_orig, cmap=pltlib.cpt_rainbow, clim=dem_clim, alpha=0.6, **kwargs)
         pltlib.add_cbar(axa[0,0], im, arr=ref_dem_orig, clim=dem_clim, label=None)
         pltlib.add_scalebar(axa[0,0], res=res)
         axa[0,0].set_title('Reference DEM')
         axa[0,1].imshow(src_dem_hs, cmap='gray', **kwargs)
-        im = axa[0,1].imshow(src_dem_orig, cmap='cpt_rainbow', clim=dem_clim, alpha=0.6, **kwargs)
+        im = axa[0,1].imshow(src_dem_orig, cmap=pltlib.cpt_rainbow, clim=dem_clim, alpha=0.6, **kwargs)
         pltlib.add_cbar(axa[0,1], im, arr=src_dem_orig, clim=dem_clim, label=None)
         axa[0,1].set_title('Source DEM')
         #axa[0,2].imshow(~static_mask_orig, clim=(0,1), cmap='gray')
@@ -629,6 +653,11 @@ def main(argv=None):
         print("Writing out figure: %s" % fig_fn)
         fig_final.savefig(fig_fn, dpi=300)
         plt.close(fig_final)
+
+    if n_fit_failed == n - 1:
+        print("\nWARNING: horizontal fit failed in all %i iterations, output has vertical shift only (dx=dy=0)" % n_fit_failed)
+    elif n_fit_failed > 0:
+        print("\nWARNING: horizontal fit failed in %i of %i iterations" % (n_fit_failed, n - 1))
 
 if __name__ == "__main__":
     main()
